@@ -1,0 +1,522 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="description" content="Lacey - Programming Assignment 3">
+    <meta charset="utf-8">
+    <title>Lacey - Programming Assignment 3</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+            overflow:hidden;
+        }
+    </style>
+</head>
+<body style="background-color:rgb(0,0,0)">
+    <div style="position:absolute; left:0px; top:0px;">
+    <canvas id="myCanvas" width="400" height="400"></canvas>
+    </div>
+    <div id="display" style="position:absolute; z-index:1; left:10px; top:10px">
+
+    </div>
+</body>
+<script src="http://graphics.cs.wisc.edu/JS/twgl-full.min.js"></script>
+<script>
+    "use strict"
+    // frames per second, or time between updates, local time info
+    var updateTime = 1000 / 60; // 60fps
+    var d = new Date();
+    var tempTime = d.getMilliseconds() + d.getSeconds() * 1000;
+    var interval = 1500;  //Frequency: 0.5 HZ = 2000; 1 HZ = 1000; 2 HZ = 500;
+
+    // the canvas and it's context
+    var canvas;
+    var context;
+
+    // twgl linear algebra helper
+    var m4 = twgl.m4;
+
+    // 3d camera vars and transform
+    var eye = [0, 0, 0];
+    var target = [0, 0, 0];
+    var cam_up = [0, 1, 0];
+    var Tcamera = m4.inverse(m4.lookAt(eye, target, cam_up));
+
+    // 3d model and view transforms
+    var Tmodel = m4.identity();
+    var TmodelView = m4.multiply(Tmodel, Tcamera);
+
+    // copter values
+    var cop_vel = 0;
+    var cop_vel_max = 20; // max velocity in any direction
+    var cop_rotY = 0;
+    var cop_rot_speed = 0.05;
+    var cop_x = 0;
+    var cop_y = 0;
+
+    // ground values
+    var groundY = -2200;
+    var radius = 2000;
+    var arcLength = 200;
+    var uangle = (arcLength / radius);// angle to step by to have similar arc lengths
+    var iterations = Math.floor((Math.PI * radius) / arcLength);
+
+    // mouse position data
+    var mouseX = 0;
+    var mouseY = 0;
+
+    // keyboard input status
+    var right = false;
+    var left = false;
+    var up = false;
+    var down = false;
+
+    // initialize our varaibles and start update function
+	function init() {
+        canvas = document.getElementById('myCanvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        context = canvas.getContext('2d');
+        m4 = twgl.m4;
+
+        this.updateDisplay();
+
+        setTimeout(this.onUpdate, updateTime);
+    };
+
+    // updates text display
+    function updateDisplay() {
+        document.getElementById("display").innerHTML = '<font color="#FFFFFF">3D Isocopter: By Skadi Lacey<br />A practice in 3d hierachical modeling.<br />Use "A" and "D" to rotate.<br />Use "W" and "S" to accelerate in opposite directions.<br />Mouse position pans camera.</font>';
+    };
+
+    // move to helper, maps 3d to 2d
+    function moveToTx(x, y, z, Tx) {
+        var loc = [x, y, z];
+        var locTx = m4.transformPoint(Tx, loc);
+        context.moveTo(locTx[0] + canvas.width / 2, -locTx[1] + canvas.height / 2);
+    };
+
+    // line to helper, maps 3d to 2d
+    function lineToTx(x, y, z, Tx) {
+        var loc = [x, y, z];
+        var locTx = m4.transformPoint(Tx, loc);
+        context.lineTo(locTx[0] + canvas.width / 2, -locTx[1] + canvas.height / 2);
+    };
+
+    // draw a rotor blade
+    function drawRotor(Tx) {
+
+        // little x for origin marker
+        moveToTx(0, 0, -20, Tx);
+        lineToTx(0, 0, 20, Tx);
+        moveToTx(-20, 0, 0, Tx);
+        lineToTx(20, 0, 0, Tx);
+
+        // square base
+        moveToTx(50, 0, -50, Tx);
+        lineToTx(50, 0, 50, Tx);
+        lineToTx(-50, 0, 50, Tx);
+        lineToTx(-50, 0, -50, Tx);
+        lineToTx(50, 0, -50, Tx);
+
+        // lines to tip of pyramid
+        lineToTx(0, 150, 0, Tx);
+        moveToTx(50, 0, 50, Tx);
+        lineToTx(0, 150, 0, Tx);
+        moveToTx(-50, 0, 50, Tx);
+        lineToTx(0, 150, 0, Tx);
+        moveToTx(-50, 0, -50, Tx);
+        lineToTx(0, 150, 0, Tx);
+
+        // blade 1
+        moveToTx(-50, 0, 0, Tx);
+        lineToTx(-12.5, 112.5, 12.5, Tx);
+
+        moveToTx(-50, 0, -50, Tx);
+        lineToTx(-12.5, 112.5, 12.5, Tx);
+
+        moveToTx(-50, 0, -50, Tx);
+        lineToTx(-400.0, 0, -25, Tx);
+
+        moveToTx(-50, 0, 0, Tx);
+        lineToTx(-400.0, 0, -25, Tx);
+
+        moveToTx(-12.5, 112.5, 12.5, Tx);
+        lineToTx(-400.0, 50, 0, Tx);
+        lineToTx(-400.0, 0, -25, Tx);
+
+        // blade 2
+        moveToTx(50, 0, 0, Tx);
+        lineToTx(12.5, 112.5, -12.5, Tx);
+
+        moveToTx(50, 0, 50, Tx);
+        lineToTx(12.5, 112.5, -12.5, Tx);
+
+        moveToTx(50, 0, 50, Tx);
+        lineToTx(400.0, 0, 25, Tx);
+
+        moveToTx(50, 0, 0, Tx);
+        lineToTx(400.0, 0, 25, Tx);
+
+        moveToTx(12.5, 112.5, -12.5, Tx);
+        lineToTx(400.0, 50, 0, Tx);
+        lineToTx(400.0, 0, 25, Tx);
+
+        // blade 3
+        moveToTx(0, 0, 50, Tx);
+        lineToTx(12.5, 112.5, 12.5, Tx);
+
+        moveToTx(-50, 0, 50, Tx);
+        lineToTx(12.5, 112.5, 12.5, Tx);
+
+        moveToTx(-50, 0, 50, Tx);
+        lineToTx(-25, 0, 400, Tx);
+
+        moveToTx(0, 0, 50, Tx);
+        lineToTx(-25, 0, 400, Tx);
+
+        moveToTx(12.5, 112.5, 12.5, Tx);
+        lineToTx(0, 50, 400, Tx);
+        lineToTx(-25, 0, 400, Tx);
+
+        // blade 4
+        moveToTx(0, 0, -50, Tx);
+        lineToTx(-12.5, 112.5, -12.5, Tx);
+
+        moveToTx(50, 0, -50, Tx);
+        lineToTx(-12.5, 112.5, -12.5, Tx);
+
+        moveToTx(50, 0, -50, Tx);
+        lineToTx(25, 0, -400, Tx);
+
+        moveToTx(0, 0, -50, Tx);
+        lineToTx(25, 0, -400, Tx);
+
+        moveToTx(-12.5, 112.5, -12.5, Tx);
+        lineToTx(0, 50, -400, Tx);
+        lineToTx(25, 0, -400, Tx);
+    };
+
+    // draws a cuboid up ([0,1,0]) and out with bottom face centered on origin and applys Tx transform
+    function drawCuboid(x, y, z, w, h, l, Tx) {
+        moveToTx(x - w / 2, y, z - l / 2, Tx);
+        lineToTx(x + w / 2, y, z - l / 2, Tx);
+        lineToTx(x + w / 2, y, z + l / 2, Tx);
+        lineToTx(x - w / 2, y, z + l / 2, Tx);
+        lineToTx(x - w / 2, y, z - l / 2, Tx);
+
+        moveToTx(x - w / 2, y + h, z - l / 2, Tx);
+        lineToTx(x + w / 2, y + h, z - l / 2, Tx);
+        lineToTx(x + w / 2, y + h, z + l / 2, Tx);
+        lineToTx(x - w / 2, y + h, z + l / 2, Tx);
+        lineToTx(x - w / 2, y + h, z - l / 2, Tx);
+        lineToTx(x - w / 2, y, z - l / 2, Tx);
+        moveToTx(x + w / 2, y + h, z - l / 2, Tx);
+        lineToTx(x + w / 2, y, z - l / 2, Tx);
+        moveToTx(x + w / 2, y + h, z + l / 2, Tx);
+        lineToTx(x + w / 2, y, z + l / 2, Tx);
+        moveToTx(x - w / 2, y + h, z + l / 2, Tx);
+        lineToTx(x - w / 2, y, z + l / 2, Tx);
+    };
+
+    // draws concentric circles around the x and z axis with even arc length spacing
+    function drawGround(Tx) {
+        for (var i = 0; i < iterations; i++) {
+            var tempRadius = radius * Math.sin(uangle * i - uangle * (cop_x % arcLength) / arcLength);
+            var tempAngle = arcLength / tempRadius;
+            var tempItr = Math.floor((Math.PI * tempRadius) / arcLength);
+
+            // x-axis
+            for (var j = 0; j < tempItr; j++) {
+                context.beginPath();
+                // apply gradient to fade in from edges
+                context.strokeStyle = "rgb(0, " + Math.floor(255 * (tempRadius * Math.sin(tempAngle * (j + 1))/3) / radius) + ", 0)";
+                moveToTx(radius * Math.cos(uangle * i - uangle * (cop_x % arcLength) / arcLength), tempRadius * Math.sin(tempAngle * j) + groundY, tempRadius * Math.cos(tempAngle * j), Tx);
+                lineToTx(radius * Math.cos(uangle * i - uangle * (cop_x % arcLength) / arcLength), tempRadius * Math.sin(tempAngle * (j + 1)) + groundY, tempRadius * Math.cos(tempAngle * (j + 1)), Tx);
+                context.stroke();
+            };
+
+            // z-axis
+            tempRadius = radius * Math.sin(uangle * i + uangle * (cop_y % arcLength) / arcLength);
+            for (var k = 0; k < tempItr; k++) {
+                context.beginPath();
+                // apply gradient to fade in from edges
+                context.strokeStyle = "rgb(0, " + Math.floor(255 * (tempRadius * Math.sin(tempAngle * (k + 1))/3) / radius) + ", 0)";
+                moveToTx(tempRadius * Math.cos(tempAngle * k), tempRadius * Math.sin(tempAngle * k) + groundY, radius * Math.cos(uangle * i + uangle * (cop_y % arcLength) / arcLength), Tx);
+                lineToTx(tempRadius * Math.cos(tempAngle * (k + 1)), tempRadius * Math.sin(tempAngle * (k + 1)) + groundY, radius * Math.cos(uangle * i + uangle * (cop_y % arcLength) / arcLength),  Tx);
+                context.stroke();
+            };
+        };
+    };
+
+    function drawCopter(Tx) {
+        
+        // copter body geometry
+        context.beginPath();
+        context.strokeStyle = "#FFFFFF";
+        context.lineCap = "round";
+
+        moveToTx(-200, 0, -100, Tx);
+        lineToTx(200, 0, -100, Tx);
+        lineToTx(200, 0, 100, Tx);
+        lineToTx(-200, 0, 100, Tx);
+        lineToTx(-200, 0, -100, Tx);
+        
+        lineToTx(-300, 100, -150, Tx);
+        lineToTx(300, 100, -150, Tx);
+        lineToTx(200, 0, -100, Tx);
+        moveToTx(300, 100, -150, Tx);
+        lineToTx(300, 100, 150, Tx);
+        lineToTx(200, 0, 100, Tx);
+        moveToTx(300, 100, 150, Tx);
+        lineToTx(-300, 100, 150, Tx);
+        lineToTx(-200, 0, 100, Tx);
+        moveToTx(-300, 100, 150, Tx);
+        lineToTx(-300, 100, -150, Tx);
+        
+        moveToTx(300, 150, 150, Tx);
+        lineToTx(-300, 150, 150, Tx);
+        
+        lineToTx(-300, 100, 150, Tx);
+        moveToTx(-300, 150, 150, Tx);
+        lineToTx(-300, 150, -150, Tx);
+        lineToTx(-300, 100, -150, Tx);
+        lineToTx(-300, 150, -150, Tx);
+        
+        lineToTx(300, 150, -150, Tx);
+        lineToTx(300, 100, -150, Tx);
+        moveToTx(300, 150, -150, Tx);
+        lineToTx(300, 150, 150, Tx);
+        lineToTx(300, 100, 150, Tx);
+        moveToTx(-200, 200, -100, Tx);
+        lineToTx(200, 200, -100, Tx);
+        lineToTx(200, 200, 100, Tx);
+        lineToTx(-200, 200, 100, Tx);
+        lineToTx(-200, 200, -100, Tx);
+
+        lineToTx(-300, 150, -150, Tx);
+        moveToTx(200, 200, -100, Tx);
+        lineToTx(300, 150, -150, Tx);
+        moveToTx(200, 200, 100, Tx);
+        lineToTx(300, 150, 150, Tx);
+        moveToTx(-200, 200, 100, Tx);
+        lineToTx(-300, 150, 150, Tx);
+
+        context.stroke();
+
+        // green directional arrow
+        context.beginPath();
+        context.strokeStyle = "#00FF00";
+        context.lineWidth = "3";
+        moveToTx(0, 200, 0, Tx);
+        lineToTx(-150, 200, 0, Tx);
+        lineToTx(-100, 200, -50, Tx);
+        moveToTx(-150, 200, 0, Tx);
+        lineToTx(-100, 200, 50, Tx);
+        context.stroke();
+
+        // colored boxes under rotors
+        context.beginPath();
+        context.strokeStyle = "#FF0000";
+        context.lineWidth = "1";
+        drawCuboid(-600, 100, 500, 100, 50, 100, Tx);
+        drawCuboid(-600, 100, -500, 100, 50, 100, Tx);
+        context.stroke();
+
+        context.beginPath();
+        context.strokeStyle = "#FFFF00";
+        drawCuboid(600, 100, -500, 100, 50, 100, Tx);
+        drawCuboid(600, 100, 500, 100, 50, 100, Tx);
+        context.stroke();
+        
+        // connect rotors to body
+        context.beginPath();
+        context.strokeStyle = "#FFFFFF";
+
+        moveToTx(0, 150, -150, Tx);
+        lineToTx(-550, 150, -550, Tx);
+        moveToTx(0, 100, -150, Tx);
+        lineToTx(-550, 100, -550, Tx);
+
+        moveToTx(-300, 150, 0, Tx);
+        lineToTx(-650, 150, -450, Tx);
+        moveToTx(-300, 100, 0, Tx);
+        lineToTx(-650, 100, -450, Tx);
+
+        moveToTx(0, 150, -150, Tx);
+        lineToTx(550, 150, -550, Tx);
+        moveToTx(0, 100, -150, Tx);
+        lineToTx(550, 100, -550, Tx);
+
+        moveToTx(300, 150, 0, Tx);
+        lineToTx(650, 150, -450, Tx);
+        moveToTx(300, 100, 0, Tx);
+        lineToTx(650, 100, -450, Tx);
+
+        moveToTx(0, 150, 150, Tx);
+        lineToTx(550, 150, 550, Tx);
+        moveToTx(0, 100, 150, Tx);
+        lineToTx(550, 100, 550, Tx);
+
+        moveToTx(300, 150, 0, Tx);
+        lineToTx(650, 150, 450, Tx);
+        moveToTx(300, 100, 0, Tx);
+        lineToTx(650, 100, 450, Tx);
+
+        moveToTx(0, 150, 150, Tx);
+        lineToTx(-550, 150, 550, Tx);
+        moveToTx(0, 100, 150, Tx);
+        lineToTx(-550, 100, 550, Tx);
+
+        moveToTx(-300, 150, 0, Tx);
+        lineToTx(-650, 150, 450, Tx);
+        moveToTx(-300, 100, 0, Tx);
+        lineToTx(-650, 100, 450, Tx);
+
+        moveToTx(0, 150, 150, Tx);
+        lineToTx(0, 100, 150, Tx);
+        moveToTx(0, 150, -150, Tx);
+        lineToTx(0, 100, -150, Tx);
+        moveToTx(-300, 150, 0, Tx);
+        lineToTx(-300, 100, 0, Tx);
+        moveToTx(300, 150, 0, Tx);
+        lineToTx(300, 100, 0, Tx); 
+
+        context.stroke();
+
+        // draw rotors
+        drawRotor(m4.multiply(m4.rotationY((tempTime % interval) / interval * 2 * Math.PI), m4.multiply(m4.multiply(m4.scaling([-1, 1, 1]), m4.translation([-600, 150, -500])), Tx)));
+        context.stroke();
+        drawRotor(m4.multiply(m4.rotationY((tempTime % interval) / interval * 2 * Math.PI), m4.multiply(m4.translation([-600, 150, 500]), Tx)));
+        context.stroke();
+        drawRotor(m4.multiply(m4.rotationY((tempTime % interval) / interval * 2 * Math.PI), m4.multiply(m4.multiply(m4.scaling([-1, 1, 1]), m4.translation([600, 150, 500])), Tx)));
+        context.stroke();
+        drawRotor(m4.multiply(m4.rotationY((tempTime % interval) / interval * 2 * Math.PI), m4.multiply(m4.translation([600, 150, -500]), Tx)));
+        context.stroke();
+    };
+
+    // update function
+    function onUpdate() {
+        // clear the canvas
+        canvas.width = canvas.width;
+
+        // update local time values
+        d = new Date();
+        tempTime = d.getMilliseconds() + d.getSeconds() * 1000 + d.getMinutes() * 60000 + d.getHours() * 60000 * 24;
+        
+        // reduce velocity over time
+        cop_vel -= 0.2 * (cop_vel > 0);
+        cop_vel += 0.2 * (cop_vel < 0);
+        if (cop_vel < 0.2 && cop_vel > -0.2)
+            cop_vel = 0.0;
+
+        // update values based on user input
+        if (right) {
+            cop_rotY -= cop_rot_speed;
+        };
+        if (left) {
+            cop_rotY += cop_rot_speed;
+        };
+        interval = 1500;
+        if (up) {
+            interval = 750;
+            cop_vel += 0.8;
+            if (cop_vel > cop_vel_max)
+                cop_vel = cop_vel_max;
+        };
+        if (down) {
+            interval = 750;
+            cop_vel -= 0.8;
+            if (cop_vel < -cop_vel_max)
+                cop_vel = -cop_vel_max;
+        };
+
+        // update copter position
+        cop_x += Math.cos(cop_rotY) * cop_vel;
+        cop_y += Math.sin(cop_rotY) * cop_vel;
+        
+        // update camera transform
+        // add a small amount of movement to eye over time to reduce the effect of no perspective in isometric views
+        eye = [50, 50 * ((mouseY + (5 * Math.sin((tempTime % 5000) / 5000 * 2 * Math.PI))) / canvas.height), -50 + 100 * ((mouseX + (5 * Math.cos((tempTime % 7000) / 7000 * 2 * Math.PI))) / canvas.width)];
+        target = [0, 0, 0];
+        cam_up = [0, 1, 0];
+        Tcamera = m4.inverse(m4.lookAt(eye, target, cam_up));
+        
+        // update copter model transform
+        Tmodel = m4.identity();
+        Tmodel = m4.multiply(m4.translation([0, 25 + 25 * Math.sin((tempTime % 5000) / 5000 * 2 * Math.PI), 0]), Tmodel);
+        Tmodel = m4.multiply(m4.rotationY(cop_rotY), Tmodel);
+        Tmodel = m4.multiply(m4.rotationZ(0.3 * cop_vel / cop_vel_max), Tmodel);
+        var tanX = 1;
+        var tanY = Math.cos((tempTime % 5000) / 5000 * 2 * Math.PI);
+        var tanAngle = Math.atan2(tanY, tanX);
+        Tmodel = m4.multiply(m4.rotationZ(tanAngle * 0.1), Tmodel);
+        Tmodel = m4.multiply(m4.rotationX(0.05 * Math.cos((tempTime % 7000) / 7000 * 2 * Math.PI)), Tmodel);
+        Tmodel = m4.multiply(m4.scaling([0.5, 0.5, 0.5]), Tmodel);
+
+        // apply camera transform to model transform
+        TmodelView = m4.multiply(Tmodel, Tcamera);
+
+        // render geometry
+        drawGround(Tcamera);
+        drawCopter(TmodelView);
+
+        // set next frame update
+        setTimeout(this.onUpdate, updateTime);
+    };
+
+    // event for window resizing
+    function myResize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    };
+
+    // event for mouse moving
+    function myMouse(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    };
+
+    // event for keyboard key being pressed
+    function myKeyDown(e) {
+        if (e.keyCode == 68) {
+            right = true;
+        };
+        if (e.keyCode == 65) {
+            left = true;
+        };
+        if (e.keyCode == 87) {
+            up = true;
+        };
+        if (e.keyCode == 83) {
+            down = true;
+        };
+    };
+
+    // event for keyboard key being released
+    function myKeyUp(e) {
+        if (e.keyCode == 68) {
+            right = false;
+        };
+        if (e.keyCode == 65) {
+            left = false;
+        };
+        if (e.keyCode == 87) {
+            up = false;
+        };
+        if (e.keyCode == 83) {
+            down = false;
+        };
+    };
+
+    // set event listeners
+    window.onload = this.init;
+    window.onresize = this.myResize;
+    window.onmousemove = this.myMouse;
+    window.onkeydown = this.myKeyDown;
+    window.onkeyup = this.myKeyUp;
+</script>
+</html>

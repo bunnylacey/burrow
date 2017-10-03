@@ -1,0 +1,141 @@
+﻿d<!DOCTYPE html>
+<html>
+<head>
+    <meta name="description" content="Lacey - Programming Assignment 1">
+    <meta charset="utf-8">
+    <title>Lacey - Programming Assignment 1</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+            overflow:hidden;
+        }
+    </style>
+</head>
+<body style="background-color:rgb(0,0,0)">
+    <div style="position:absolute; left:0px; top:0px;">
+    <canvas id="myCanvas" width="400" height="400"></canvas>
+    </div>
+    <div id="display" style="position:absolute; z-index:1; left:10px; top:10px">
+
+    </div>
+    <img id="sonic" src="sonic.gif" style="position:absolute; z-index:1; left:50px; top:200px" />
+</body>
+<script>
+    "use strict"
+    var canvas;
+    var context;
+    var scale = 200;
+    var wavelength = Math.PI * 2;
+    var interval = 3000;  //Frequency: 0.5 HZ = 2000; 1 HZ = 1000; 2 HZ = 500;
+
+    var mouseX = 0;
+    var mouseY = 0;
+
+	function init() {
+        canvas = document.getElementById('myCanvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        scale = canvas.height * 0.5 * 0.6;
+        this.updateDisplay();
+		context = canvas.getContext('2d');
+        setTimeout(this.onUpdate, 16);
+    };
+    function updateDisplay() {
+        document.getElementById("display").innerHTML = '<font color="#FFFFFF">Sine on the Line: By Skadi Lacey<br />Red line is y=sin(x);<br />Yellow line is tangent for x=' + mouseX + ';<br />Green line is normal for x=' + mouseX + ';<br />Animated oscillating at frequency = ' + (1000 / interval) + ' Hz</font>';
+    };
+    function onUpdate() {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.beginPath();
+
+        var d = new Date();
+        var tempTime = d.getMilliseconds() + d.getSeconds() * 1000;
+        var i = 0;
+        var tempX = i;
+        var tempOffset = 0;
+        var angle = 0;
+        var tempY = 0;
+        var tanX = 0;
+        var tanY = 0;
+        var tanAngle = 0;
+        var normX = 0;
+        var normY = 0;
+        var normAngle = 0;
+        context.beginPath();
+        context.strokeStyle = "#FF0000";
+        context.lineWidth = 5;
+
+        for (i = 0; i < canvas.width; i++)
+        {
+            tempX = i;
+            tempOffset = (2 * Math.PI) * ((i % (wavelength * scale)) / (wavelength * scale));
+            angle = ((tempTime % interval) / interval * 2 * Math.PI) + tempOffset;
+            tempY = (canvas.height / 2) + Math.sin(angle) * scale;
+            if (i == 0) {
+                context.moveTo(tempX, tempY);
+            } else {
+                context.lineTo(tempX, tempY);
+            };
+        };
+        context.stroke();
+
+        //tangent
+        i = mouseX;
+        tempX = i;
+        tempOffset = (2 * Math.PI) * ((i % (wavelength * scale)) / (wavelength * scale));
+        angle = ((tempTime % interval) / interval * 2 * Math.PI) + tempOffset;
+        tempY = (canvas.height / 2) + Math.sin(angle) * scale;
+        tanX = 1;
+        tanY = Math.cos(angle);
+        tanAngle = Math.atan2(tanY, tanX);
+        context.beginPath();
+        context.strokeStyle = "#FFFF00";
+        context.lineWidth = 3;
+        context.moveTo(tempX - Math.cos(tanAngle) * scale, tempY - Math.sin(tanAngle) * scale);
+        context.lineTo(tempX + Math.cos(tanAngle) * scale, tempY + Math.sin(tanAngle) * scale);
+        context.stroke();
+
+        //normal
+        normX = -tanY;
+        normY = 1;
+        normAngle = Math.atan2(normY, normX);
+        context.beginPath();
+        context.strokeStyle = "#00FF00";
+        context.lineWidth = 3;
+        context.moveTo(tempX - Math.cos(normAngle) * scale, tempY - Math.sin(normAngle) * scale);
+        context.lineTo(tempX + Math.cos(normAngle) * scale, tempY + Math.sin(normAngle) * scale);
+        context.stroke();
+
+        //update sonic
+        document.getElementById("sonic").style.transformOrigin = "0% 0%";
+        document.getElementById("sonic").style.transform = "rotate(" + tanAngle * (180 / Math.PI) + "deg)";
+        document.getElementById("sonic").style.left = tempX - (Math.cos(tanAngle) * 129 - Math.sin(tanAngle) * 234) + "px";
+        document.getElementById("sonic").style.top = tempY - (Math.sin(tanAngle) * 129 + Math.cos(tanAngle) * 234) + "px";
+        
+        //xbar
+        context.beginPath();
+        context.strokeStyle = "#0000FF";
+        context.lineWidth = 3;
+        context.moveTo(mouseX, 0);
+        context.lineTo(mouseX, canvas.height);
+        context.stroke();
+        setTimeout(this.onUpdate, 16);
+    };
+    function myResize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        scale = canvas.height * 0.5 * 0.6;
+        this.updateDisplay();
+    };
+    function myMouse(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        this.updateDisplay();
+    };
+    window.onload = this.init;
+    window.onresize = this.myResize;
+    window.onmousemove = this.myMouse;
+</script>
+</html>

@@ -1,0 +1,296 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="description" content="Lacey - Programming Assignment 2">
+    <meta charset="utf-8">
+    <title>Lacey - Programming Assignment 2</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+            overflow:hidden;
+        }
+    </style>
+</head>
+<body style="background-color:rgb(0,0,0)">
+    <div style="position:absolute; left:0px; top:0px;">
+    <canvas id="myCanvas" width="400" height="400"></canvas>
+    </div>
+    <div id="display" style="position:absolute; z-index:1; left:10px; top:10px">
+
+    </div>
+</body>
+<script>
+    "use strict"
+    // frames per second, or time between updates, local time info
+    var updateTime = 1000 / 60; // 60fps
+    var d = new Date();
+    var tempTime = d.getMilliseconds() + d.getSeconds() * 1000;
+
+    // the canvas and it's context
+    var canvas;
+    var context;
+
+    // mouse position data
+    var mouseX = 0;
+    var mouseY = 0;
+
+    // keyboard input status
+    var right = false;
+    var left = false;
+    var up = false;
+    var down = false;
+
+    // copter vars
+    var cop_x = 0;
+    var cop_y = 0;
+    var cop_vel = 0;
+    var cop_vel_max = 20; // max velocity in either direction
+    var cop_rot = 0;
+    var cop_rot_speed = 0.1; // speed of copter rotation
+    var cop_blade_spin = 500; // time interval for blade spin
+
+    // initialize our varaibles and start update function
+	function init() {
+        canvas = document.getElementById('myCanvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        cop_x = canvas.width / 2;
+        cop_y = canvas.height / 2;
+        this.updateDisplay();
+		context = canvas.getContext('2d');
+        setTimeout(this.onUpdate, updateTime);
+    };
+
+    // updates text display
+    function updateDisplay() {
+        document.getElementById("display").innerHTML = '<font color="#FFFFFF">My Asteroids-esque Copter: By Skadi Lacey<br />A practice in 2d hierarchical modeling.<br />Copter wraps neatly around browser edges.<br />Use "A" and "D" to rotate.<br />Use "W" and "S" to accelerate in opposite directions.</font>';
+    };
+
+    // update function
+    function onUpdate() {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
+        // update local time values
+        d = new Date();
+        tempTime = d.getMilliseconds() + d.getSeconds() * 1000;
+        var interval = 500;  //Frequency: 0.5 HZ = 2000; 1 HZ = 1000; 2 HZ = 500;
+
+        // reduce velocity over time
+        cop_vel -= 0.1 * (cop_vel > 0);
+        cop_vel += 0.1 * (cop_vel < 0);
+        if (cop_vel < 0.1 && cop_vel > -0.1)
+            cop_vel = 0.0;
+
+        // update values based on user input
+        if (right) {
+            cop_rot += cop_rot_speed;
+        };
+        if (left) {
+            cop_rot -= cop_rot_speed;
+        };
+        if (up) {
+            cop_vel += 0.3;
+            if (cop_vel > cop_vel_max)
+                cop_vel = cop_vel_max;
+        };
+        if (down) {
+            cop_vel -= 0.3;
+            if (cop_vel < -cop_vel_max)
+                cop_vel = -cop_vel_max;
+        };
+
+        // update copter position
+        cop_x += Math.cos(cop_rot) * cop_vel;
+        cop_y += Math.sin(cop_rot) * cop_vel;
+
+        // wrap around bounds
+        if (cop_x > canvas.width)
+            cop_x = cop_x % canvas.width;
+        if (cop_x < 0)
+            cop_x = canvas.width + cop_x;
+        if (cop_y < 0)
+            cop_y = canvas.height + cop_y;
+        if (cop_y > canvas.height)
+            cop_y = cop_y % canvas.height;
+
+        // draw copters with wrap around
+        // could add additional logic that checks main position bounds with canvas bounds to not have to draw all every update
+        drawCopter(cop_x - canvas.width, cop_y - canvas.height, cop_rot);
+        drawCopter(cop_x - canvas.width, cop_y, cop_rot);
+        drawCopter(cop_x - canvas.width, cop_y + canvas.height, cop_rot);
+
+        drawCopter(cop_x, cop_y - canvas.height, cop_rot);
+        drawCopter(cop_x, cop_y, cop_rot);  //main copter
+        drawCopter(cop_x, cop_y + canvas.height, cop_rot);
+
+        drawCopter(cop_x + canvas.width, cop_y - canvas.height, cop_rot);
+        drawCopter(cop_x + canvas.width, cop_y, cop_rot);
+        drawCopter(cop_x + canvas.width, cop_y + canvas.height, cop_rot);
+        
+        // set next frame update
+        setTimeout(this.onUpdate, updateTime);
+    };
+    function drawCopter(x, y, rot) {
+        context.save();
+        context.transform(0.5, 0, 0, 0.5, x, y);
+        context.rotate(rot);
+        context.beginPath();
+        context.strokeStyle = "#0000FF";
+        context.lineWidth = 3;
+        context.moveTo(-200, -100);
+        context.lineTo(200, -100);
+        context.lineTo(200, 100);
+        context.lineTo(-200, 100);
+        context.lineTo(-200, -100);
+
+
+        context.stroke();
+        context.fillStyle = "#333300";
+        context.fill();
+
+        // circle
+        context.beginPath();
+        context.arc(125, 0, 50, 0, 2 * Math.PI);
+        context.stroke();
+
+        // arms to blades
+        // 1
+        context.beginPath();
+        context.moveTo(-200, -90);
+        context.lineTo(-300, -200);
+        context.lineTo(-190, -100);
+        context.lineTo(-200, -90);
+        context.stroke();
+
+        // 2
+        context.beginPath();
+        context.moveTo(-200, 90);
+        context.lineTo(-300, 200);
+        context.lineTo(-190, 100);
+        context.lineTo(-200, 90);
+        context.stroke();
+
+        // 3
+        context.beginPath();
+        context.moveTo(200, -90);
+        context.lineTo(300, -200);
+        context.lineTo(190, -100);
+        context.lineTo(200, -90);
+        context.stroke();
+
+        // 4
+        context.beginPath();
+        context.moveTo(200, 90);
+        context.lineTo(300, 200);
+        context.lineTo(190, 100);
+        context.lineTo(200, 90);
+        context.stroke();
+
+        // rotor blade 1
+        context.save();
+        context.transform(1, 0, 0, 1, -300, -200);
+        context.rotate(-((tempTime % cop_blade_spin) / cop_blade_spin * 2 * Math.PI));
+        context.beginPath();
+        context.strokeStyle = "#FF0000";
+        context.lineWidth = 10;
+        context.moveTo(-200, 0);
+        context.lineTo(200, 0);
+        context.stroke();
+        context.restore();
+
+        // rotor blade 2
+        context.save();
+        context.transform(1, 0, 0, 1, -300, 200);
+        context.rotate(((tempTime % cop_blade_spin) / cop_blade_spin * 2 * Math.PI));
+        context.beginPath();
+        context.strokeStyle = "#FF0000";
+        context.lineWidth = 10;
+        context.moveTo(-200, 0);
+        context.lineTo(200, 0);
+        context.stroke();
+        context.restore();
+
+        // rotor blade 3
+        context.save();
+        context.transform(1, 0, 0, 1, 300, -200);
+        context.rotate(((tempTime % cop_blade_spin) / cop_blade_spin * 2 * Math.PI));
+        context.beginPath();
+        context.strokeStyle = "#FF0000";
+        context.lineWidth = 10;
+        context.moveTo(-200, 0);
+        context.lineTo(200, 0);
+        context.stroke();
+        context.restore();
+
+        // rotor blade 4
+        context.save();
+        context.transform(1, 0, 0, 1, 300, 200);
+        context.rotate(-((tempTime % cop_blade_spin) / cop_blade_spin * 2 * Math.PI));
+        context.beginPath();
+        context.strokeStyle = "#FF0000";
+        context.lineWidth = 10;
+        context.moveTo(-200, 0);
+        context.lineTo(200, 0);
+        context.stroke();
+        context.restore();
+
+        context.restore();
+    };
+
+    // event for window resizing
+    function myResize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        this.updateDisplay();
+    };
+
+    // event for mouse moving
+    function myMouse(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        this.updateDisplay();
+    };
+
+    // event for keyboard key being pressed
+    function myKeyDown(e) {
+        if (e.keyCode == 68) {
+            right = true;
+        };
+        if (e.keyCode == 65) {
+            left = true;
+        };
+        if (e.keyCode == 87) {
+            up = true;
+        };
+        if (e.keyCode == 83) {
+            down = true;
+        };
+    };
+
+    // event for keyboard key being released
+    function myKeyUp(e) {
+        if (e.keyCode == 68) {
+            right = false;
+        };
+        if (e.keyCode == 65) {
+            left = false;
+        };
+        if (e.keyCode == 87) {
+            up = false;
+        };
+        if (e.keyCode == 83) {
+            down = false;
+        };
+    };
+
+    // set event listeners
+    window.onload = this.init;
+    window.onresize = this.myResize;
+    window.onmousemove = this.myMouse;
+    window.onkeydown = this.myKeyDown;
+    window.onkeyup = this.myKeyUp;
+</script>
+</html>
