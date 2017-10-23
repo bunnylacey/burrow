@@ -1,0 +1,310 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="description" content="Lacey - Programming Assignment 4">
+    <meta charset="utf-8">
+    <title>Lacey - Programming Assignment 4</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+            overflow:hidden;
+        }
+    </style>
+</head>
+<body style="background-color:rgb(0,0,0)">
+    <div style="position:absolute; left:0px; top:0px;">
+    <canvas id="myCanvas" width="400" height="400"></canvas>
+    </div>
+    <font color="#FFFFFF">
+        <div id="display" style="position:absolute; z-index:1; left:10px; top:10px">
+
+        </div>
+        </font>
+</body>
+<script src="https://graphics.cs.wisc.edu/JS/twgl-full.min.js"></script>
+<script>
+    "use strict"
+    // triangle class definition
+    // p1, p2, p3 are 3d vector end points of triangle
+    // centroid is center point, used for z-sorting and lighting
+    // color is fill color of triangle when drawn on canvas
+    class Triangle {
+        constructor(p1, p2, p3, color, name) {
+            this.p1 = p1;
+            this.p2 = p2;
+            this.p3 = p3;
+            this.zmax = Math.max(this.p1[2], this.p2[2], this.p3[3]);
+            this.zsum = this.p1[2] + this.p2[2] + this.p3[3];
+            this.centroid = [(this.p1[0] + this.p2[0] + this.p3[0]) / 3, (this.p1[1] + this.p2[1] + this.p3[1]) / 3, (this.p1[2] + this.p2[2] + this.p3[2]) / 3];
+            this.color = color;
+            this.name = name;
+        }
+
+        zsumTx(Tx) {
+            var p1Tx = m4.transformPoint(Tx, this.p1);
+            var p2Tx = m4.transformPoint(Tx, this.p2);
+            var p3Tx = m4.transformPoint(Tx, this.p3);
+            return p1Tx[2] + p2Tx[2] + p3Tx[2];
+        }
+    }
+
+    // frames per second, or time between updates, local time info
+    var updateTime = 1000 / 60; // 60fps
+    var d = new Date();
+    var tempTime = d.getMilliseconds() + d.getSeconds() * 1000;
+    var interval = 1500;  //Frequency: 0.5 HZ = 2000; 1 HZ = 1000; 2 HZ = 500;
+
+    // the canvas and it's context
+    var canvas;
+    var context;
+
+    // twgl linear algebra helper
+    var m4 = twgl.m4;
+
+    // 3d camera vars and transform
+    var eye = [0, 0, 0];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var camera;
+    var view;
+    var viewport;
+    var projection;
+    var viewProjection;
+    
+    // Primitives
+    var triangles = new Array();
+    
+    // mouse position data
+    var mouseX = 0;
+    var mouseY = 0;
+
+    // initialize our varaibles and start update function
+	function init() {
+        canvas = document.getElementById('myCanvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        context = canvas.getContext('2d');
+        m4 = twgl.m4;
+
+        this.updateDisplay();
+
+        setTimeout(this.onUpdate, updateTime);
+    };
+
+    // updates text display
+    function updateDisplay() {
+        document.getElementById("display").innerHTML = '';
+    };
+
+    // move to helper, maps 3d to 2d
+    function moveToTx(x, y, z, Tx) {
+        var loc = [x, y, z];
+        var locTx = m4.transformPoint(Tx, loc);
+        context.moveTo(locTx[0], locTx[1]);
+    };
+
+    // line to helper, maps 3d to 2d
+    function lineToTx(x, y, z, Tx) {
+        var loc = [x, y, z];
+        var locTx = m4.transformPoint(Tx, loc);
+        context.lineTo(locTx[0], locTx[1]);
+    };
+
+    // draws a cuboid up ([0,1,0]) and out with bottom face centered on origin and applys Tx transform
+    function drawCuboid(x, y, z, w, h, l, Tx) {
+
+        // base plane
+        triangles.push(new Triangle([x - w / 2, y, z - l / 2], [x + w / 2, y, z - l / 2], [x + w / 2, y, z + l / 2],"#222222","base 1"));
+        triangles.push(new Triangle([x + w / 2, y, z + l / 2], [x - w / 2, y, z + l / 2], [x - w / 2, y, z - l / 2], "#111111","base 2"));
+
+        // top plane
+        triangles.push(new Triangle([x - w / 2, y + h, z - l / 2], [x + w / 2, y + h, z - l / 2], [x + w / 2, y + h, z + l / 2], "#FFFFFF","top 1"));
+        triangles.push(new Triangle([x + w / 2, y + h, z + l / 2], [x - w / 2, y + h, z + l / 2], [x - w / 2, y + h, z - l / 2], "#EEEEEE","top 2"));
+
+        // front plane
+        triangles.push(new Triangle([x - w / 2, y + h, z + l / 2], [x + w / 2, y + h, z + l / 2], [x + w / 2, y, z + l / 2], "#FF0000","front 1"));
+        triangles.push(new Triangle([x + w / 2, y, z + l / 2], [x - w / 2, y, z + l / 2], [x - w / 2, y + h, z + l / 2], "#990000","front 2"));
+
+        //// back plane
+        triangles.push(new Triangle([x - w / 2, y + h, z - l / 2], [x + w / 2, y + h, z - l / 2], [x + w / 2, y, z - l / 2], "#660066","back 1"));
+        triangles.push(new Triangle([x + w / 2, y, z - l / 2], [x - w / 2, y, z - l / 2], [x - w / 2, y + h, z - l / 2], "#550055","back 2"));
+
+        //// left plane
+        triangles.push(new Triangle([x - w / 2, y + h, z - l / 2], [x - w / 2, y + h, z + l / 2], [x - w / 2, y, z + l / 2], "#00ff00","left 1"));
+        triangles.push(new Triangle([x - w / 2, y, z + l / 2], [x - w / 2, y, z - l / 2], [x - w / 2, y + h, z - l / 2], "#009900","left 2"));
+
+        //// right plane
+        triangles.push(new Triangle([x + w / 2, y + h, z - l / 2], [x + w / 2, y + h, z + l / 2], [x + w / 2, y, z + l / 2], "#0000ff","right 1"));
+        triangles.push(new Triangle([x + w / 2, y, z + l / 2], [x + w / 2, y, z - l / 2], [x + w / 2, y + h, z - l / 2], "#000099","right 2"));
+    };
+
+    function drawTris(Tx) {
+        triangles.forEach(function (t, i) {
+            document.getElementById("display").innerHTML = document.getElementById("display").innerHTML + t.name + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[0] + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[1] + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[2] + "<br />";
+            context.beginPath();
+            context.strokeStyle = t.color;
+            context.fillStyle = t.color;
+            moveToTx(t.p1[0], t.p1[1], t.p1[2], Tx);
+            lineToTx(t.p2[0], t.p2[1], t.p2[2], Tx);
+            lineToTx(t.p3[0], t.p3[1], t.p3[2], Tx);
+            lineToTx(t.p1[0], t.p1[1], t.p1[2], Tx);
+            context.fill();
+            context.stroke();
+        }); // end of for each
+    };
+
+    // z-sort using quick sort
+    // a : array being sorted
+    // l : left index
+    // r : right index
+    // Tx : transform to sort from
+    function zsort(a, l, r, Tx) {
+        var pivot = a[Math.floor((r + l) / 2)];
+        var i = l;
+        var j = r;
+
+        for (var w = 0; w < r - 1; w++) {
+            for (var q = w + 1; q < r; q++) {
+                if (m4.transformPoint(Tx, a[q].centroid)[2] > m4.transformPoint(Tx, a[w].centroid)[2]) {
+                //if (a[q].zsumTx(Tx) > a[w].zsumTx(Tx)) {
+                    swap(a, q, w);
+                }
+            }
+        }
+        //while (i <= j) {
+
+        //    while (m4.transformPoint(Tx, a[i].centroid)[2] < m4.transformPoint(Tx, pivot.centroid)[2]) {
+        //        i++;
+        //    }
+
+        //    while (m4.transformPoint(Tx, a[j].centroid)[2] > m4.transformPoint(Tx, pivot.centroid)[2]) {
+        //        j--;
+        //    }
+
+        //    if (i <= j) {
+        //        swap(a, i, j);
+        //        i++;
+        //        j--;
+        //    }
+        //}
+
+        //a.reverse();
+        return a;
+    };
+
+    // distance sort using quick sort
+    // a : array being sorted
+    // l : left index
+    // r : right index
+    // p : point distance from
+    function dsort(a, l, r, p) {
+        var pivot = a[Math.floor((r + l) / 2)];
+        var i = l;
+        var j = r;
+
+        while (i <= j) {
+
+            while (distance(a[i].centroid, p) < distance(pivot.centroid, p)) {
+                i++;
+            }
+
+            while (distance(a[j].centroid, p) > distance(pivot.centroid, p)) {
+                j--;
+            }
+
+            if (i <= j) {
+                swap(a, i, j);
+                i++;
+                j--;
+            }
+        }
+
+        a.reverse();
+    };
+
+    // compute and return distance between 3D points p1, p2
+    function distance(p1, p2) {
+        return Math.sqrt((p2[0] - p1[0]) ^ 2 + (p2[1] - p1[1]) ^ 2 + (p2[2] - p1[2]) ^ 2);
+    };
+
+    // swap function
+    // a : array
+    // f : first index
+    // s : second index
+    function swap(a, f, s) {
+        var t = a[f];
+        a[f] = a[s];
+        a[s] = t;
+    };
+
+    // update function
+    function onUpdate() {
+        this.updateDisplay();
+        // clear the canvas
+        canvas.width = canvas.width;
+
+        // clear primitives
+        triangles = [];
+
+        // update local time values
+        d = new Date();
+        tempTime = d.getMilliseconds() + d.getSeconds() * 1000 + d.getMinutes() * 60000 + d.getHours() * 60000 * 24;
+        
+        // update camera transform
+        viewport = m4.scaling([canvas.width / 2, -canvas.height / 2, 1]);
+        m4.setTranslation(viewport, [canvas.width / 2, canvas.height / 2, 0], viewport);
+        projection = m4.perspective(30 * Math.PI / 180, canvas.clientWidth / canvas.clientHeight, 0.1, 10000);
+        eye = [3000 * Math.cos(Math.PI * (mouseX / canvas.width)), 6000 - 12000 * (mouseY / canvas.height), 3000 * Math.sin(Math.PI * (mouseX / canvas.width))];
+        target = [0, 0, 0];
+        up = [0, 1, 0];
+        camera = m4.lookAt(eye, target, up);
+        viewProjection = m4.multiply(m4.inverse(camera), projection);
+        view = m4.multiply(viewProjection, viewport);
+
+        // render geometry
+        context.beginPath();
+        context.strokeStyle = "rgb(0, 255, 0)";
+        drawCuboid(0, -500, 0, 1000, 1000, 1000, view);
+        context.stroke();
+
+        // zsort tris
+        //triangles.sort(function (a, b) {
+        //    if (m4.transformPoint(m4.inverse(camera), a.centroid)[2] > m4.transformPoint(m4.inverse(camera), b.centroid)[2]) {
+        //        return -1;
+        //    } else {
+        //        return 1;
+        //    }
+        //});
+        //triangles.reverse();
+        zsort(triangles, 0, triangles.length, view);
+        //dsort(triangles, 0, triangles.length - 1, m4.inverse(camera));
+
+        // render triangles
+        drawTris(view);
+
+        // set next frame update
+        setTimeout(this.onUpdate, updateTime);
+    };
+
+    // event for window resizing
+    function myResize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    };
+
+    // event for mouse moving
+    function myMouse(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    };
+
+    // set event listeners
+    window.onload = this.init;
+    window.onresize = this.myResize;
+    window.onmousemove = this.myMouse;
+</script>
+</html>
