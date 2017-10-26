@@ -83,7 +83,7 @@
     // Primitives
     var triangles = new Array();
 
-    // copter values
+    // copter values, in this program, player or Icosahedron values
     var cop_vel = 0;
     var cop_vel_max = 20; // max velocity in any direction
     var cop_rotY = 0;
@@ -91,7 +91,6 @@
     var cop_rot_speed = 0.05;
     var cop_x = 0;
     var cop_y = 0;
-
     var ico_rot_matrix = m4.identity();
 
     // ground values
@@ -121,7 +120,7 @@
 
     // updates text display
     function updateDisplay() {
-        document.getElementById("display").innerHTML = '';
+        document.getElementById("display").innerHTML = '<font color="#FFFFFF">Rolling For Crits: By Skadi Lacey<br />A practice in z-sorting primitives.<br />Use "A" and "D" to rotate.<br />Use "W" and "S" to accelerate in opposite directions.<br />Mouse position pans camera.</font>';
     };
 
     // move to helper, maps 3d to 2d
@@ -138,6 +137,7 @@
         context.lineTo(locTx[0], locTx[1]);
     };
 
+    // Not used in this program
     // bezier curve helper, maps 3d to 2d
     function bezierCurveToTx(cp1x, cp1y, cp1z, cp2x, cp2y, cp2z, x, y, z, Tx) {
         var loc = [x, y, z];
@@ -149,6 +149,7 @@
         context.bezierCurveTo(cp1Tx[0], cp1Tx[1], cp2Tx[0], cp2Tx[1], locTx[0], locTx[1]);
     };
 
+    // Not used in this program
     // draws a cuboid up ([0,1,0]) and out with bottom face centered on origin and applys Tx transform
     function drawCuboid(x, y, z, w, h, l) {
 
@@ -179,7 +180,7 @@
 
     // draw an Icosahedron at location x,y,z and circumscribed radius r
     function drawIcosahedron(x, y, z, r, Tx) {
-        //var edgeLength = r / Math.sin((2 * Math.PI) / 5);
+        // radian intervals for vertex points
         var lonSpacing = Math.PI / 5;
         var latSpacing = Math.atan(1 / 2);
 
@@ -226,9 +227,10 @@
         triangles.push(new Triangle(b, b8, b0, "rgb(149,204,161)", "d20"));
     }
 
-    // draws concentric circles around the x and z axis with even arc length spacing
+    // draws grid texture mapped to sphere surface with equal arc spacing
     function drawGround(Tx) {
 
+        // pre-calculate spacings and transforms
         var mx = ((cop_x) % arcLength);
         var mxua = uangle * mx / arcLength;
         var mxx = ((cop_x) % (arcLength * 2));
@@ -236,14 +238,13 @@
         var myua = uangle * my / arcLength;
         var myy = ((cop_y) % (arcLength * 2));
 
+        // double loop through the grid space
         for (var i = Math.ceil(iterations / 4); i < iterations - Math.ceil(iterations / 4) - 1; i++) {
             for (var k = Math.ceil(iterations / 4); k < iterations - Math.ceil(iterations / 4) - 1; k++) {
-                //var r1 = radius * Math.sin(uangle * (i) - uangle * (cop_x % arcLength) / arcLength);
-                //var a1 = arcLength / r1;
-                //var i1 = Math.floor((Math.PI * r1) / arcLength);
+                // vertex points for 4 corners of a single grid square
                 var x1 = radius * Math.cos(uangle * k - mxua);
                 var z1 = radius * Math.cos(uangle * i + myua);
-                var y1 = Math.sqrt((radius * radius) - (x1 * x1) - (z1 * z1)) + groundY;//radius * (Math.sin(uangle * (i) + uangle * (cop_y % arcLength) / arcLength)) + groundY;
+                var y1 = Math.sqrt((radius * radius) - (x1 * x1) - (z1 * z1)) + groundY;
 
                 var x2 = radius * Math.cos(uangle * (k + 1) - mxua);
                 var z2 = radius * Math.cos(uangle * i + myua);
@@ -256,13 +257,8 @@
                 var x4 = radius * Math.cos(uangle * (k + 1) - mxua);
                 var z4 = radius * Math.cos(uangle * (i + 1) + myua);
                 var y4 = Math.sqrt((radius * radius) - (x4 * x4) - (z4 * z4)) + groundY;
-                //var r2 = radius * Math.sin(uangle * (i + 1) - uangle * (cop_y % arcLength) / arcLength);
-                //var a2 = arcLength / r2;
-                //var x2 = radius * Math.cos(uangle * (k + 1) - uangle * (cop_x % arcLength) / arcLength);
-                //var y2 = r2 * Math.sin(a2 * (i + 1)) + groundY;//radius * (Math.sin(uangle * (i + 1) + uangle * (cop_y % arcLength) / arcLength)) + groundY;
-                //var z2 = radius * Math.cos(uangle * (i + 1) + uangle * (cop_y % arcLength) / arcLength);
 
-
+                //  modular positioning to maintain correct color sequence
                 if ((3 + i + k) % 2) {
                     if (Math.abs(mxx) > Math.abs(mx)) {
                         if (Math.abs(myy) > Math.abs(my)) {
@@ -306,48 +302,12 @@
                 }
                 
             }
-            
-
-            //context.beginPath();
-            //context.strokeStyle = "rgb(0, 255, 0)";
-            //moveToTx(tempX, 0 + groundY, tempRadius, Tx);
-            //bezierCurveToTx(tempX, tempRadius * 0.552284749831 + groundY, tempRadius, tempX, tempRadius + groundY, tempRadius * 0.552284749831, tempX, tempRadius + groundY, 0, Tx);
-            //bezierCurveToTx(tempX, tempRadius + groundY, -tempRadius * 0.552284749831, tempX, tempRadius * 0.552284749831 + groundY, -tempRadius, tempX, 0 + groundY, -tempRadius, Tx);
-            //context.stroke();
-
-            //tempRadius = radius * Math.sin(uangle * i + uangle * (cop_y % arcLength) / arcLength);
-            //context.beginPath();
-            //moveToTx(-tempRadius, 0 + groundY, tempZ, Tx);
-            //bezierCurveToTx(-tempRadius, tempRadius * 0.552284749831 + groundY, tempZ, -tempRadius * 0.552284749831, tempRadius + groundY, tempZ, 0, tempRadius + groundY, tempZ, Tx);
-            //bezierCurveToTx(tempRadius * 0.552284749831, tempRadius + groundY, tempZ, tempRadius, tempRadius * 0.552284749831 + groundY, tempZ, tempRadius, 0 + groundY, tempZ, Tx);
-            //context.stroke();
-
-            // x-axis
-            //for (var j = 0; j < tempItr; j++) {
-            //    context.beginPath();
-            //    // apply gradient to fade in from edges
-            //    context.strokeStyle = "rgb(0, " + Math.floor(255 * (tempRadius * Math.sin(tempAngle * (j + 1))/3) / radius) + ", 0)";
-            //    moveToTx(radius * Math.cos(uangle * i - uangle * (cop_x % arcLength) / arcLength), tempRadius * Math.sin(tempAngle * j) + groundY, tempRadius * Math.cos(tempAngle * j), Tx);
-            //    lineToTx(radius * Math.cos(uangle * i - uangle * (cop_x % arcLength) / arcLength), tempRadius * Math.sin(tempAngle * (j + 1)) + groundY, tempRadius * Math.cos(tempAngle * (j + 1)), Tx);
-            //    context.stroke();
-            //};
-
-            // z-axis
-            //tempRadius = radius * Math.sin(uangle * i + uangle * (cop_y % arcLength) / arcLength);
-            //for (var k = 0; k < tempItr; k++) {
-            //    context.beginPath();
-            //    // apply gradient to fade in from edges
-            //    context.strokeStyle = "rgb(0, " + Math.floor(255 * (tempRadius * Math.sin(tempAngle * (k + 1))/3) / radius) + ", 0)";
-            //    moveToTx(tempRadius * Math.cos(tempAngle * k), tempRadius * Math.sin(tempAngle * k) + groundY, radius * Math.cos(uangle * i + uangle * (cop_y % arcLength) / arcLength), Tx);
-            //    lineToTx(tempRadius * Math.cos(tempAngle * (k + 1)), tempRadius * Math.sin(tempAngle * (k + 1)) + groundY, radius * Math.cos(uangle * i + uangle * (cop_y % arcLength) / arcLength),  Tx);
-            //    context.stroke();
-            //};
         };
     };
 
+    // renders all triangles in the triangles array
     function drawTris(Tx) {
         triangles.forEach(function (t, i) {
-            //document.getElementById("display").innerHTML = document.getElementById("display").innerHTML + t.name + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[0] + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[1] + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[2] + "<br />";
             context.beginPath();
             context.strokeStyle = t.color;
             context.fillStyle = t.color;
@@ -360,7 +320,7 @@
         }); // end of for each
     };
 
-    // z-sort using quick sort
+    // z-sort using max sort
     // a : array being sorted
     // l : left index
     // r : right index
@@ -372,33 +332,16 @@
 
         for (var w = 0; w < r - 1; w++) {
             for (var q = w + 1; q < r; q++) {
+                // swapping based on z value of the triangle's centroid
                 if (m4.transformPoint(Tx, a[q].centroid)[2] > m4.transformPoint(Tx, a[w].centroid)[2]) {
-                //if (a[q].zsumTx(Tx) > a[w].zsumTx(Tx)) {
                     swap(a, q, w);
                 }
             }
         }
-        //while (i <= j) {
-
-        //    while (m4.transformPoint(Tx, a[i].centroid)[2] < m4.transformPoint(Tx, pivot.centroid)[2]) {
-        //        i++;
-        //    }
-
-        //    while (m4.transformPoint(Tx, a[j].centroid)[2] > m4.transformPoint(Tx, pivot.centroid)[2]) {
-        //        j--;
-        //    }
-
-        //    if (i <= j) {
-        //        swap(a, i, j);
-        //        i++;
-        //        j--;
-        //    }
-        //}
-
-        //a.reverse();
         return a;
     };
 
+    // Not used in this program
     // distance sort using quick sort
     // a : array being sorted
     // l : left index
@@ -429,6 +372,7 @@
         a.reverse();
     };
 
+    // Not used in this program
     // compute and return distance between 3D points p1, p2
     function distance(p1, p2) {
         return Math.sqrt((p2[0] - p1[0]) ^ 2 + (p2[1] - p1[1]) ^ 2 + (p2[2] - p1[2]) ^ 2);
@@ -446,7 +390,7 @@
 
     // update function
     function onUpdate() {
-        this.updateDisplay();
+
         // clear the canvas
         canvas.width = canvas.width;
 
@@ -502,59 +446,19 @@
         viewProjection = m4.multiply(m4.inverse(camera), projection);
         view = m4.multiply(viewProjection, viewport);
 
-        // render geometry
-        //context.beginPath();
-        //context.strokeStyle = "rgb(0, 255, 0)";
-        //drawCuboid(0, 0, 0, 1000, 1000, 1000);
-        //context.stroke();
-        //ico_rot_matrix = m4.rotationY(cop_rotY, ico_rot_matrix);
-        //m4.rotationX((Math.sin(cop_rotY) * cop_vel) / 200, ico_rot_matrix);
-        //m4.rotationZ((Math.cos(cop_rotY) * cop_vel) / 200, ico_rot_matrix);
-
+        // update transform for the Icosahedron
         var icoTx = m4.identity();
-
         m4.multiply(m4.axisRotate(icoTx, m4.transformPoint(m4.inverse(ico_rot_matrix), [0, 1, 0]), cop_rot_vel), ico_rot_matrix, ico_rot_matrix);
         m4.multiply(m4.axisRotate(icoTx, m4.transformPoint(m4.inverse(ico_rot_matrix), [Math.sin(cop_rotY), 0, Math.cos(cop_rotY)]), cop_vel / 200), ico_rot_matrix, ico_rot_matrix);
-        
-        
         icoTx = m4.translate(icoTx, [0, 170, 0]);
-        //var tanX = 1;
-        //var tanY = Math.cos(cop_rotY);
-        //var tanAngle = Math.atan2(tanY, tanX);
-        //var normX = -Math.cos(cop_rotY);
-        //var normY = 1;
-        //var normAngle = Math.atan2(normY, normX);
-        //m4.axisRotate(ico_rot_matrix, [Math.sin(cop_rotY), 0, Math.cos(cop_rotY)], cop_vel / 200, ico_rot_matrix);
-        //console.clear();
-        //console.log(ico_rot_matrix);
-        //icoTx = m4.rotateY(icoTx, cop_rotY);
         m4.multiply(ico_rot_matrix, icoTx, icoTx);
-        //m4.multiply(m4.rotateY(cop_rotY), icoTx);
-        
-        //icoTx = m4.rotateZ(icoTx, (cop_x / 200));//m4.multiply(m4.rotationZ((cop_x / 200) * Math.cos(cop_rotY)), icoTx); // distance = radians * radius
 
-        
-        //icoTx = m4.rotateX(icoTx, (cop_y / 200));//m4.multiply(m4.rotationX((cop_y / 200) * Math.sin(cop_rotY)), icoTx); // radians = distance / radius
-        //icoTx = m4.rotateY(icoTx, cop_rotY);
-        //icoTx = m4.rotateY(icoTx, cop_rotY);
-        
-        
+        // add geometry to triangles array
         drawIcosahedron(0, 0, 0, 200, icoTx);
         drawGround(view);
 
-        // zsort tris
-        //triangles.sort(function (a, b) {
-        //    if (m4.transformPoint(m4.inverse(camera), a.centroid)[2] > m4.transformPoint(m4.inverse(camera), b.centroid)[2]) {
-        //        return -1;
-        //    } else {
-        //        return 1;
-        //    }
-        //});
-        //triangles.reverse();
+        // sort and render triangles
         zsort(triangles, 0, triangles.length, view);
-        //dsort(triangles, 0, triangles.length - 1, m4.inverse(camera));
-
-        // render triangles
         drawTris(view);
 
         // set next frame update
