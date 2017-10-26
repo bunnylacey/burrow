@@ -57,6 +57,12 @@
     var tempTime = d.getMilliseconds() + d.getSeconds() * 1000;
     var interval = 1500;  //Frequency: 0.5 HZ = 2000; 1 HZ = 1000; 2 HZ = 500;
 
+    // keyboard input status
+    var key_right = false;
+    var key_left = false;
+    var key_up = false;
+    var key_down = false;
+
     // the canvas and it's context
     var canvas;
     var context;
@@ -76,6 +82,24 @@
     
     // Primitives
     var triangles = new Array();
+
+    // copter values
+    var cop_vel = 0;
+    var cop_vel_max = 20; // max velocity in any direction
+    var cop_rotY = 0;
+    var cop_rot_vel = 0;
+    var cop_rot_speed = 0.05;
+    var cop_x = 0;
+    var cop_y = 0;
+
+    var ico_rot_matrix = m4.identity();
+
+    // ground values
+    var groundY = -2000;
+    var radius = 2000;
+    var arcLength = 200;
+    var uangle = (arcLength / radius);// angle to step by to have similar arc lengths
+    var iterations = Math.floor((Math.PI * radius) / arcLength);
     
     // mouse position data
     var mouseX = 0;
@@ -114,8 +138,19 @@
         context.lineTo(locTx[0], locTx[1]);
     };
 
+    // bezier curve helper, maps 3d to 2d
+    function bezierCurveToTx(cp1x, cp1y, cp1z, cp2x, cp2y, cp2z, x, y, z, Tx) {
+        var loc = [x, y, z];
+        var locTx = m4.transformPoint(Tx, loc);
+        var cp1 = [cp1x, cp1y, cp1z];
+        var cp1Tx = m4.transformPoint(Tx, cp1);
+        var cp2 = [cp2x, cp2y, cp2z];
+        var cp2Tx = m4.transformPoint(Tx, cp2);
+        context.bezierCurveTo(cp1Tx[0], cp1Tx[1], cp2Tx[0], cp2Tx[1], locTx[0], locTx[1]);
+    };
+
     // draws a cuboid up ([0,1,0]) and out with bottom face centered on origin and applys Tx transform
-    function drawCuboid(x, y, z, w, h, l, Tx) {
+    function drawCuboid(x, y, z, w, h, l) {
 
         // base plane
         triangles.push(new Triangle([x - w / 2, y, z - l / 2], [x + w / 2, y, z - l / 2], [x + w / 2, y, z + l / 2],"#222222","base 1"));
@@ -142,9 +177,177 @@
         triangles.push(new Triangle([x + w / 2, y, z + l / 2], [x + w / 2, y, z - l / 2], [x + w / 2, y + h, z - l / 2], "#000099","right 2"));
     };
 
+    // draw an Icosahedron at location x,y,z and circumscribed radius r
+    function drawIcosahedron(x, y, z, r, Tx) {
+        //var edgeLength = r / Math.sin((2 * Math.PI) / 5);
+        var lonSpacing = Math.PI / 5;
+        var latSpacing = Math.atan(1 / 2);
+
+        // verticies
+        var t = m4.transformPoint(Tx, [x, y + r, z]);
+
+        var b0 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(0), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(0)]);
+        var t1 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing)]);
+        var b2 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 2), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 2)]);
+        var t3 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 3), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 3)]);
+        var b4 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 4), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 4)]);
+        var t5 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 5), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 5)]);
+        var b6 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 6), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 6)]);
+        var t7 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 7), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 7)]);
+        var b8 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 8), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 8)]);
+        var t9 = m4.transformPoint(Tx, [x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 9), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 9)]);
+
+        var b = m4.transformPoint(Tx, [x, y - r, z]);
+
+        // top 5 tris
+        triangles.push(new Triangle(t, t1, t3, "rgb(167,230,181)", "d20"));
+        triangles.push(new Triangle(t, t3, t5, "rgb(130,179,141)", "d20"));
+        triangles.push(new Triangle(t, t5, t7, "rgb(93,128,101)", "d20"));
+        triangles.push(new Triangle(t, t7, t9, "rgb(112,153,121)", "d20"));
+        triangles.push(new Triangle(t, t9, t1, "rgb(130,179,141)", "d20"));
+
+        // middle 10 tris
+        triangles.push(new Triangle(b0, t1, b2, "rgb(167,230,181)", "d20"));
+        triangles.push(new Triangle(t1, b2, t3, "rgb(186, 255, 201)", "d20"));
+        triangles.push(new Triangle(b2, t3, b4, "rgb(167,230,181)", "d20"));
+        triangles.push(new Triangle(t3, b4, t5, "rgb(149,204,161)", "d20"));
+        triangles.push(new Triangle(b4, t5, b6, "rgb(130,179,141)", "d20"));
+        triangles.push(new Triangle(t5, b6, t7, "rgb(112,153,121)", "d20"));
+        triangles.push(new Triangle(b6, t7, b8, "rgb(93,128,101)", "d20"));
+        triangles.push(new Triangle(t7, b8, t9, "rgb(112,153,121)", "d20"));
+        triangles.push(new Triangle(b8, t9, b0, "rgb(130,179,141)", "d20"));
+        triangles.push(new Triangle(t9, b0, t1, "rgb(149,204,161)", "d20"));
+
+        // bottom 5 tris
+        triangles.push(new Triangle(b, b0, b2, "rgb(186,255,201)", "d20"));
+        triangles.push(new Triangle(b, b2, b4, "rgb(149,204,161)", "d20"));
+        triangles.push(new Triangle(b, b4, b6, "rgb(112,153,121)", "d20"));
+        triangles.push(new Triangle(b, b6, b8, "rgb(93,128,101)", "d20"));
+        triangles.push(new Triangle(b, b8, b0, "rgb(149,204,161)", "d20"));
+    }
+
+    // draws concentric circles around the x and z axis with even arc length spacing
+    function drawGround(Tx) {
+
+        var mx = ((cop_x) % arcLength);
+        var mxua = uangle * mx / arcLength;
+        var mxx = ((cop_x) % (arcLength * 2));
+        var my = ((cop_y) % arcLength);
+        var myua = uangle * my / arcLength;
+        var myy = ((cop_y) % (arcLength * 2));
+
+        for (var i = Math.ceil(iterations / 4); i < iterations - Math.ceil(iterations / 4) - 1; i++) {
+            for (var k = Math.ceil(iterations / 4); k < iterations - Math.ceil(iterations / 4) - 1; k++) {
+                //var r1 = radius * Math.sin(uangle * (i) - uangle * (cop_x % arcLength) / arcLength);
+                //var a1 = arcLength / r1;
+                //var i1 = Math.floor((Math.PI * r1) / arcLength);
+                var x1 = radius * Math.cos(uangle * k - mxua);
+                var z1 = radius * Math.cos(uangle * i + myua);
+                var y1 = Math.sqrt((radius * radius) - (x1 * x1) - (z1 * z1)) + groundY;//radius * (Math.sin(uangle * (i) + uangle * (cop_y % arcLength) / arcLength)) + groundY;
+
+                var x2 = radius * Math.cos(uangle * (k + 1) - mxua);
+                var z2 = radius * Math.cos(uangle * i + myua);
+                var y2 = Math.sqrt((radius * radius) - (x2 * x2) - (z2 * z2)) + groundY;
+
+                var x3 = radius * Math.cos(uangle * k - mxua);
+                var z3 = radius * Math.cos(uangle * (i + 1) + myua);
+                var y3 = Math.sqrt((radius * radius) - (x3 * x3) - (z3 * z3)) + groundY;
+
+                var x4 = radius * Math.cos(uangle * (k + 1) - mxua);
+                var z4 = radius * Math.cos(uangle * (i + 1) + myua);
+                var y4 = Math.sqrt((radius * radius) - (x4 * x4) - (z4 * z4)) + groundY;
+                //var r2 = radius * Math.sin(uangle * (i + 1) - uangle * (cop_y % arcLength) / arcLength);
+                //var a2 = arcLength / r2;
+                //var x2 = radius * Math.cos(uangle * (k + 1) - uangle * (cop_x % arcLength) / arcLength);
+                //var y2 = r2 * Math.sin(a2 * (i + 1)) + groundY;//radius * (Math.sin(uangle * (i + 1) + uangle * (cop_y % arcLength) / arcLength)) + groundY;
+                //var z2 = radius * Math.cos(uangle * (i + 1) + uangle * (cop_y % arcLength) / arcLength);
+
+
+                if ((3 + i + k) % 2) {
+                    if (Math.abs(mxx) > Math.abs(mx)) {
+                        if (Math.abs(myy) > Math.abs(my)) {
+                            triangles.push(new Triangle([x1, y1, z1], [x2, y2, z2], [x3, y3, z3], "#c9c9ff", "g"));
+                            triangles.push(new Triangle([x2, y2, z2], [x4, y4, z4], [x3, y3, z3], "#c9c9ff", "g"));
+                        } else {
+                            triangles.push(new Triangle([x1, y1, z1], [x2, y2, z2], [x3, y3, z3], "#f1cbff", "g"));
+                            triangles.push(new Triangle([x2, y2, z2], [x4, y4, z4], [x3, y3, z3], "#f1cbff", "g"));
+                        }
+                    } else {
+                        if (Math.abs(myy) > Math.abs(my)) {
+                            triangles.push(new Triangle([x1, y1, z1], [x2, y2, z2], [x3, y3, z3], "#f1cbff", "g"));
+                            triangles.push(new Triangle([x2, y2, z2], [x4, y4, z4], [x3, y3, z3], "#f1cbff", "g"));
+                        } else {
+                            triangles.push(new Triangle([x1, y1, z1], [x2, y2, z2], [x3, y3, z3], "#c9c9ff", "g"));
+                            triangles.push(new Triangle([x2, y2, z2], [x4, y4, z4], [x3, y3, z3], "#c9c9ff", "g"));
+                        }
+                        
+                    }
+                    
+                } else {
+                    if (Math.abs(mxx) > Math.abs(mx)) {
+                        if (Math.abs(myy) > Math.abs(my)) {
+                            triangles.push(new Triangle([x1, y1, z1], [x2, y2, z2], [x3, y3, z3], "#f1cbff", "g"));
+                            triangles.push(new Triangle([x2, y2, z2], [x4, y4, z4], [x3, y3, z3], "#f1cbff", "g"));
+                        } else {
+                            triangles.push(new Triangle([x1, y1, z1], [x2, y2, z2], [x3, y3, z3], "#c9c9ff", "g"));
+                            triangles.push(new Triangle([x2, y2, z2], [x4, y4, z4], [x3, y3, z3], "#c9c9ff", "g"));
+                        }
+                    } else {
+                        if (Math.abs(myy) > Math.abs(my)) {
+                            triangles.push(new Triangle([x1, y1, z1], [x2, y2, z2], [x3, y3, z3], "#c9c9ff", "g"));
+                            triangles.push(new Triangle([x2, y2, z2], [x4, y4, z4], [x3, y3, z3], "#c9c9ff", "g"));
+                        } else {
+                            triangles.push(new Triangle([x1, y1, z1], [x2, y2, z2], [x3, y3, z3], "#f1cbff", "g"));
+                            triangles.push(new Triangle([x2, y2, z2], [x4, y4, z4], [x3, y3, z3], "#f1cbff", "g"));
+                        }
+                        
+                    }
+                    
+                }
+                
+            }
+            
+
+            //context.beginPath();
+            //context.strokeStyle = "rgb(0, 255, 0)";
+            //moveToTx(tempX, 0 + groundY, tempRadius, Tx);
+            //bezierCurveToTx(tempX, tempRadius * 0.552284749831 + groundY, tempRadius, tempX, tempRadius + groundY, tempRadius * 0.552284749831, tempX, tempRadius + groundY, 0, Tx);
+            //bezierCurveToTx(tempX, tempRadius + groundY, -tempRadius * 0.552284749831, tempX, tempRadius * 0.552284749831 + groundY, -tempRadius, tempX, 0 + groundY, -tempRadius, Tx);
+            //context.stroke();
+
+            //tempRadius = radius * Math.sin(uangle * i + uangle * (cop_y % arcLength) / arcLength);
+            //context.beginPath();
+            //moveToTx(-tempRadius, 0 + groundY, tempZ, Tx);
+            //bezierCurveToTx(-tempRadius, tempRadius * 0.552284749831 + groundY, tempZ, -tempRadius * 0.552284749831, tempRadius + groundY, tempZ, 0, tempRadius + groundY, tempZ, Tx);
+            //bezierCurveToTx(tempRadius * 0.552284749831, tempRadius + groundY, tempZ, tempRadius, tempRadius * 0.552284749831 + groundY, tempZ, tempRadius, 0 + groundY, tempZ, Tx);
+            //context.stroke();
+
+            // x-axis
+            //for (var j = 0; j < tempItr; j++) {
+            //    context.beginPath();
+            //    // apply gradient to fade in from edges
+            //    context.strokeStyle = "rgb(0, " + Math.floor(255 * (tempRadius * Math.sin(tempAngle * (j + 1))/3) / radius) + ", 0)";
+            //    moveToTx(radius * Math.cos(uangle * i - uangle * (cop_x % arcLength) / arcLength), tempRadius * Math.sin(tempAngle * j) + groundY, tempRadius * Math.cos(tempAngle * j), Tx);
+            //    lineToTx(radius * Math.cos(uangle * i - uangle * (cop_x % arcLength) / arcLength), tempRadius * Math.sin(tempAngle * (j + 1)) + groundY, tempRadius * Math.cos(tempAngle * (j + 1)), Tx);
+            //    context.stroke();
+            //};
+
+            // z-axis
+            //tempRadius = radius * Math.sin(uangle * i + uangle * (cop_y % arcLength) / arcLength);
+            //for (var k = 0; k < tempItr; k++) {
+            //    context.beginPath();
+            //    // apply gradient to fade in from edges
+            //    context.strokeStyle = "rgb(0, " + Math.floor(255 * (tempRadius * Math.sin(tempAngle * (k + 1))/3) / radius) + ", 0)";
+            //    moveToTx(tempRadius * Math.cos(tempAngle * k), tempRadius * Math.sin(tempAngle * k) + groundY, radius * Math.cos(uangle * i + uangle * (cop_y % arcLength) / arcLength), Tx);
+            //    lineToTx(tempRadius * Math.cos(tempAngle * (k + 1)), tempRadius * Math.sin(tempAngle * (k + 1)) + groundY, radius * Math.cos(uangle * i + uangle * (cop_y % arcLength) / arcLength),  Tx);
+            //    context.stroke();
+            //};
+        };
+    };
+
     function drawTris(Tx) {
         triangles.forEach(function (t, i) {
-            document.getElementById("display").innerHTML = document.getElementById("display").innerHTML + t.name + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[0] + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[1] + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[2] + "<br />";
+            //document.getElementById("display").innerHTML = document.getElementById("display").innerHTML + t.name + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[0] + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[1] + " : " + m4.transformPoint(m4.inverse(camera), t.centroid)[2] + "<br />";
             context.beginPath();
             context.strokeStyle = t.color;
             context.fillStyle = t.color;
@@ -253,6 +456,40 @@
         // update local time values
         d = new Date();
         tempTime = d.getMilliseconds() + d.getSeconds() * 1000 + d.getMinutes() * 60000 + d.getHours() * 60000 * 24;
+
+        // reduce velocity over time
+        cop_vel -= 0.2 * (cop_vel > 0);
+        cop_vel += 0.2 * (cop_vel < 0);
+        if (cop_vel < 0.2 && cop_vel > -0.2)
+            cop_vel = 0.0;
+
+        // update values based on user input
+        cop_rot_vel = 0;
+        if (key_right) {
+            cop_rotY -= cop_rot_speed;
+            cop_rot_vel = -cop_rot_speed;
+        };
+        if (key_left) {
+            cop_rotY += cop_rot_speed;
+            cop_rot_vel = cop_rot_speed;
+        };
+        interval = 1500;
+        if (key_up) {
+            interval = 750;
+            cop_vel += 0.8;
+            if (cop_vel > cop_vel_max)
+                cop_vel = cop_vel_max;
+        };
+        if (key_down) {
+            interval = 750;
+            cop_vel -= 0.8;
+            if (cop_vel < -cop_vel_max)
+                cop_vel = -cop_vel_max;
+        };
+
+        // update copter position
+        cop_x += Math.cos(cop_rotY) * cop_vel;
+        cop_y += Math.sin(cop_rotY) * cop_vel;
         
         // update camera transform
         viewport = m4.scaling([canvas.width / 2, -canvas.height / 2, 1]);
@@ -266,10 +503,44 @@
         view = m4.multiply(viewProjection, viewport);
 
         // render geometry
-        context.beginPath();
-        context.strokeStyle = "rgb(0, 255, 0)";
-        drawCuboid(0, -500, 0, 1000, 1000, 1000, view);
-        context.stroke();
+        //context.beginPath();
+        //context.strokeStyle = "rgb(0, 255, 0)";
+        //drawCuboid(0, 0, 0, 1000, 1000, 1000);
+        //context.stroke();
+        //ico_rot_matrix = m4.rotationY(cop_rotY, ico_rot_matrix);
+        //m4.rotationX((Math.sin(cop_rotY) * cop_vel) / 200, ico_rot_matrix);
+        //m4.rotationZ((Math.cos(cop_rotY) * cop_vel) / 200, ico_rot_matrix);
+
+        var icoTx = m4.identity();
+
+        m4.multiply(m4.axisRotate(icoTx, m4.transformPoint(m4.inverse(ico_rot_matrix), [0, 1, 0]), cop_rot_vel), ico_rot_matrix, ico_rot_matrix);
+        m4.multiply(m4.axisRotate(icoTx, m4.transformPoint(m4.inverse(ico_rot_matrix), [Math.sin(cop_rotY), 0, Math.cos(cop_rotY)]), cop_vel / 200), ico_rot_matrix, ico_rot_matrix);
+        
+        
+        icoTx = m4.translate(icoTx, [0, 170, 0]);
+        //var tanX = 1;
+        //var tanY = Math.cos(cop_rotY);
+        //var tanAngle = Math.atan2(tanY, tanX);
+        //var normX = -Math.cos(cop_rotY);
+        //var normY = 1;
+        //var normAngle = Math.atan2(normY, normX);
+        //m4.axisRotate(ico_rot_matrix, [Math.sin(cop_rotY), 0, Math.cos(cop_rotY)], cop_vel / 200, ico_rot_matrix);
+        //console.clear();
+        //console.log(ico_rot_matrix);
+        //icoTx = m4.rotateY(icoTx, cop_rotY);
+        m4.multiply(ico_rot_matrix, icoTx, icoTx);
+        //m4.multiply(m4.rotateY(cop_rotY), icoTx);
+        
+        //icoTx = m4.rotateZ(icoTx, (cop_x / 200));//m4.multiply(m4.rotationZ((cop_x / 200) * Math.cos(cop_rotY)), icoTx); // distance = radians * radius
+
+        
+        //icoTx = m4.rotateX(icoTx, (cop_y / 200));//m4.multiply(m4.rotationX((cop_y / 200) * Math.sin(cop_rotY)), icoTx); // radians = distance / radius
+        //icoTx = m4.rotateY(icoTx, cop_rotY);
+        //icoTx = m4.rotateY(icoTx, cop_rotY);
+        
+        
+        drawIcosahedron(0, 0, 0, 200, icoTx);
+        drawGround(view);
 
         // zsort tris
         //triangles.sort(function (a, b) {
@@ -302,9 +573,43 @@
         mouseY = e.clientY;
     };
 
+    // event for keyboard key being pressed
+    function myKeyDown(e) {
+        if (e.keyCode == 68) {
+            key_right = true;
+        };
+        if (e.keyCode == 65) {
+            key_left = true;
+        };
+        if (e.keyCode == 87) {
+            key_up = true;
+        };
+        if (e.keyCode == 83) {
+            key_down = true;
+        };
+    };
+
+    // event for keyboard key being released
+    function myKeyUp(e) {
+        if (e.keyCode == 68) {
+            key_right = false;
+        };
+        if (e.keyCode == 65) {
+            key_left = false;
+        };
+        if (e.keyCode == 87) {
+            key_up = false;
+        };
+        if (e.keyCode == 83) {
+            key_down = false;
+        };
+    };
+
     // set event listeners
     window.onload = this.init;
     window.onresize = this.myResize;
     window.onmousemove = this.myMouse;
+    window.onkeydown = this.myKeyDown;
+    window.onkeyup = this.myKeyUp;
 </script>
 </html>
