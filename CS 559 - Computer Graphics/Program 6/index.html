@@ -113,13 +113,14 @@
 </head>
 <body style="background-color:rgb(0,0,0)">
     <div style="position:absolute; left:0px; top:0px;">
-    <canvas id="myCanvas" width="400" height="400"></canvas>
+        <canvas id="myCanvas" width="400" height="400"></canvas>
     </div>
-    <font color="#FFFFFF">
-        <div id="display" style="position:absolute; z-index:1; left:10px; top:10px">
-            <font color="#FFFFFF">A D20: By Bunny Lacey<br />
-        </div>
-        </font>
+    <div id="display" style="position:absolute; z-index:1; left:10px; top:10px">
+        <font color="#FFFFFF">A D20: By Bunny Lacey</font>
+    </div>
+    <div id="display" style="position:absolute; z-index:1; right:10px; top:10px">
+            <video id="video" width="320" height="240" autoplay></video>
+    </div>
 </body>
 <script src="https://graphics.cs.wisc.edu/JS/twgl-full.min.js"></script>
 <script>
@@ -336,7 +337,18 @@
     var mouseY = 0;
 
     // initialize our varaibles and start update function
-	function init() {
+    function init() {
+
+        var video = document.getElementById('video');
+        // Get access to the camera!
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // Not adding `{ audio: true }` since we only want video now
+            navigator.mediaDevices.getUserMedia({ video: true }).then(function (stream) {
+                video.src = window.URL.createObjectURL(stream);
+                video.play();
+            });
+        }
+
         canvas = document.getElementById('myCanvas');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -457,13 +469,10 @@
 	    var dir = normalize([drawObjs[0].x - eye[0], drawObjs[0].z - eye[2]]);
 	    //var dir = normalize([drawObjs[0].x - (drawObjs[0].x + 6000.0 * Math.cos((-Math.PI / 2 + eyeOffset))), drawObjs[0].z - (drawObjs[0].z + 6000.0 * Math.sin((-Math.PI / 2 + eyeOffset)))]);
 
-	    drawObjs[0].velocity -= (0.01 + 0.05 * key_down) * drawObjs[0].velocity;
-	    if (drawObjs[0].velocity < 0.1)
+	    drawObjs[0].velocity -= 0.01 * drawObjs[0].velocity;
+	    if (drawObjs[0].velocity > -0.1 && drawObjs[0].velocity < 0.1)
 	        drawObjs[0].velocity = 0.0;
-	    if (key_up) {
-	        
-	        drawObjs[0].velocity += 1.0;
-	    };
+	    drawObjs[0].velocity += (1.0 * key_up) - (1.0 * key_down);
 	    var ntrajec = [dir[0] - drawObjs[0].trajectory[0], dir[1] - drawObjs[0].trajectory[2]];
 	    drawObjs[0].trajectory[0] = drawObjs[0].trajectory[0] + ntrajec[0];
 	    drawObjs[0].trajectory[2] = drawObjs[0].trajectory[2] + ntrajec[1];
@@ -499,6 +508,8 @@
 	    }
 	    //document.getElementById("display").innerHTML = '<font color="#FFFFFF">' + drawObjs[0].trajectory[0] + ' <br/> ' + drawObjs[0].trajectory[2] + '<br/>' + drawObjs[0].trajectory[2] + '<br/>' + -drawObjs[0].trajectory[0] + '</font>';
 	    var dis = Math.sqrt((drawObjs[0].x - pre[0]) * (drawObjs[0].x - pre[0]) + (drawObjs[0].z - pre[1]) * (drawObjs[0].z - pre[1]));
+	    if (dis < 0.1)
+	        dis = 0.1;
 	    pre[0] = drawObjs[0].x - pre[0];
 	    pre[1] = drawObjs[0].z - pre[1];
 	    pre = normalize(pre);
@@ -509,7 +520,7 @@
 	    //m4.multiply(m4.axisRotation(m4.transformDirection(m4.inverse(drawObjs[0].rtx), [drawObjs[0].trajectory[0] * Math.cos(-Math.PI / 2) - drawObjs[0].trajectory[2] * Math.sin(-Math.PI / 2), drawObjs[0].trajectory[1], drawObjs[0].trajectory[0] * Math.sin(-Math.PI / 2) + drawObjs[0].trajectory[2] * Math.cos(-Math.PI / 2)]), drawObjs[0].velocity / drawObjs[0].r), drawObjs[0].rtx, drawObjs[0].rtx);
 	    m4.multiply(m4.axisRotation(m4.transformDirection(m4.inverse(drawObjs[0].rtx), [pre[0] * Math.cos(-Math.PI / 2) - pre[1] * Math.sin(-Math.PI / 2), drawObjs[0].trajectory[1], pre[0] * Math.sin(-Math.PI / 2) + pre[1] * Math.cos(-Math.PI / 2)]), dis / drawObjs[0].r), drawObjs[0].rtx, drawObjs[0].rtx);
 	    m4.setTranslation(drawObjs[0].rtx, [drawObjs[0].x, drawObjs[0].y, drawObjs[0].z], drawObjs[0].tx);
-	    document.getElementById("display").innerHTML = '<font color="#FFFFFF">' + pre[0] + ' <br/> ' + pre[1] + '<br/>' + Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]) + '<br/>' + (drawObjs[0].trajectory[0] * Math.sin(-Math.PI / 2) + drawObjs[0].trajectory[2] * Math.cos(-Math.PI / 2)) + '</font>';
+	    //document.getElementById("display").innerHTML = '<font color="#FFFFFF">' + pre[0] + ' <br/> ' + pre[1] + '<br/>' + Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]) + '<br/>' + (drawObjs[0].trajectory[0] * Math.sin(-Math.PI / 2) + drawObjs[0].trajectory[2] * Math.cos(-Math.PI / 2)) + '</font>';
 
 	    // Clear screen, prepare for rendering
 	    gl.clearColor(0.0, 0.0, 0.0, 1.0);
