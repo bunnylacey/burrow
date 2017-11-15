@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="description" content="Lacey - Programming Assignment 6">
+    <meta charset="utf-8">
+    <title>Lacey - Programming Assignment 6</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+            overflow:hidden;
+        }
+    </style>
+    <script id="vs" type="not-js">
+        uniform mat4 uWorld;
+        uniform mat4 uCamera;
+        uniform mat4 uPerspective;
+ 
+        attribute vec3 vPosition;
+        attribute vec3 vNormal;
+        attribute vec3 vColor;
+             
+        varying vec3 fPosition;
+        varying vec3 fNormal;
+        varying vec3 fColor;
+
+        varying vec3 faceNormal;
+        
+      void main()
+      {
+        fPosition = vPosition;
+        fNormal = vNormal;
+        fColor = vColor;
+        faceNormal = normalize((uCamera * vec4(vPosition, 0.0)).xyz);
+        gl_Position = uPerspective * vec4(vPosition, 1.0);
+	    
+      }
+    </script>
+    <script id="ground_fs" type="not-js">
+        precision highp float;
+
+        uniform mat4 uWorld;
+        uniform mat4 uCamera;
+        uniform mat4 uPerspective;
+
+        varying vec3 fPosition;
+        varying vec3 fNormal;
+        varying vec3 fColor;
+
+        #define PI 3.14159265359
+       
+        float pulse(float val, float dst) {
+          return floor(mod(val*dst,1.0)+0.5);
+        }
+
+        void main()
+        {
+          vec3 dir = vec3(0.0,1.0,1.0);
+        
+          vec3 tNormal = normalize((uWorld * vec4(fNormal, 0.0)).xyz);
+
+          const float d = 0.001;
+
+          float bright = pulse(fPosition.x,d) + pulse(fPosition.y,d);
+          vec3 color = mod(bright,2.0) > .5 ? vec3(0.10588235294,0.52156862745,0.72156862745) : vec3(0.68235294117,0.35294117647,0.25490196078); 
+
+          float diffuse = .5 + dot(tNormal,dir);
+          gl_FragColor = vec4(diffuse * color, 1.0);
+        }
+    </script>
+    <script id="fs" type="not-js">
+        #extension GL_EXT_shader_texture_lod : enable
+        #extension GL_OES_standard_derivatives : enable
+
+        precision highp float;
+
+        uniform mat4 uWorld;
+        uniform mat4 uCamera;
+        uniform mat4 uPerspective;
+
+        varying vec3 fPosition;
+        varying vec3 fNormal;
+        varying vec3 fColor;
+
+        varying vec3 faceNormal;
+        
+        const float ambient_coeff = 0.25;
+        const float specular_coeff = 1.0;
+        const float specular_exp = 30.0;
+        const vec3 light_color = vec3(1.0, 1.0, 1.0);
+        
+        void main(void) {
+            vec3 dir = vec3(0.0,1.0,1.0);
+            
+            vec3 tPosition = (uWorld * vec4(fPosition, 1.0)).xyz;
+            vec3 tNormal = (uWorld * vec4(fNormal, 1.0)).xyz;
+            
+            // create flat shading but offset slightly by vertex normals so it isn't 100% flat;
+            vec3 ec_normal = normalize((tNormal*0.00008) + cross(dFdx(tPosition), dFdy(tPosition)));
+            vec3 l = dir;
+            vec3 n = normalize(ec_normal);
+            vec3 e = normalize(-tPosition);
+            vec3 h = normalize (e+l);
+            vec3 ambient_color  = ambient_coeff  * fColor;
+            vec3 specular_color = specular_coeff * pow(max(0.0,dot(n,h)),specular_exp) * light_color;
+
+            vec3 diffuse_color = ((.5 + dot(ec_normal,dir)) * fColor);
+            gl_FragColor = vec4(specular_color + diffuse_color, 1.0);
+        }
+    </script>
+</head>
+<body style="background-color:rgb(0,0,0)">
+    <div style="position:absolute; left:0px; top:0px;">
+    <canvas id="myCanvas" width="400" height="400"></canvas>
+    </div>
+    <font color="#FFFFFF">
+        <div id="display" style="position:absolute; z-index:1; left:10px; top:10px">
+            <font color="#FFFFFF">A D20: By Bunny Lacey<br />
+        </div>
+        </font>
+</body>
+<script src="https://graphics.cs.wisc.edu/JS/twgl-full.min.js"></script>
+<script>
+    "use strict"
+
+    // plane class
+    // xyz origin point
+    // w x l from center of origin
+    // gl graphics object
+    // vertex color
+    // tx - model transform
+    class Plane {
+        constructor(x, y, z, w, l, gl, color, tx) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.w = w;
+            this.l = l;
+            this.gl = gl;
+            this.color = color;
+            this.tx = tx;
+            // verts
+            this.vertexPos = new Float32Array([x - w/2, y + l/2, z,
+            x + w/2, y + l/2, z,
+            x + w/2, y - l/2, z,
+            x - w/2, y - l/2, z]);
+
+            // normals
+            this.vertexNormals = new Float32Array([-1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0]);
+
+            // colors
+            this.vertexColors = new Float32Array([this.color[0], this.color[1], this.color[2], this.color[0], this.color[1], this.color[2], this.color[0], this.color[1], this.color[2], this.color[0], this.color[1], this.color[2]]);
+
+            // tris
+            this.triangleIndices = new Uint8Array([0, 1, 3, 1, 2, 3]);
+
+            // add buffers to webgl
+            // vertecies
+            this.vertexBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexPos, gl.STATIC_DRAW);
+            this.vertexBuff.itemSize = 3;
+            this.vertexBuff.numItems = 4;
+
+            // normals
+            this.normalBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexNormals, gl.STATIC_DRAW);
+            this.normalBuff.itemSize = 3;
+            this.normalBuff.numItems = 4;
+
+            // colors
+            this.colorBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexColors, gl.STATIC_DRAW);
+            this.colorBuff.itemSize = 3;
+            this.colorBuff.numItems = 4;
+
+            // triangle indicies
+            this.indexBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuff);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.triangleIndices, gl.STATIC_DRAW);
+        }
+    }
+
+    // icosahedron class definition
+    // xyz is origin point of object, r is circumscribed radius
+    // gl graphics object
+    // vertex color
+    // tx - model transform
+    class Icosahedron {
+        constructor(x, y, z, r, gl, color, tx) {
+            this.velocity = 0.0;
+            this.trajectory = [0.0, 0.0, 0.0];
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.r = r;
+            this.rtx = m4.identity();
+            this.gl = gl;
+            this.color = color;
+            this.tx = tx;
+            // radian intervals for vertex points
+            var lonSpacing = Math.PI / 5;
+            var latSpacing = Math.atan(1 / 2);
+
+            // verticies
+            this.vertexPos = new Float32Array([x, y + r, z,
+                x + r * Math.cos(latSpacing) * Math.cos(0), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(0),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 2), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 2),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 3), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 3),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 4), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 4),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 5), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 5),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 6), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 6),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 7), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 7),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 8), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 8),
+                x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 9), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 9),
+                x, y - r, z]);
+
+            // normals
+            this.vertexNormals = new Float32Array([0, 1, 0,
+                Math.cos(latSpacing) * Math.cos(0), -Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(0),
+                Math.cos(latSpacing) * Math.cos(lonSpacing), Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing),
+                Math.cos(latSpacing) * Math.cos(lonSpacing * 2), -Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 2),
+                Math.cos(latSpacing) * Math.cos(lonSpacing * 3), Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 3),
+                Math.cos(latSpacing) * Math.cos(lonSpacing * 4), -Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 4),
+                Math.cos(latSpacing) * Math.cos(lonSpacing * 5), Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 5),
+                Math.cos(latSpacing) * Math.cos(lonSpacing * 6), -Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 6),
+                Math.cos(latSpacing) * Math.cos(lonSpacing * 7), Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 7),
+                Math.cos(latSpacing) * Math.cos(lonSpacing * 8), -Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 8),
+                Math.cos(latSpacing) * Math.cos(lonSpacing * 9), Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 9),
+                0, -1, 0]);
+
+            // vertex colors
+            this.vertexColors = new Float32Array([
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2],
+               this.color[0], this.color[1], this.color[2]]);
+            
+            this.triangleIndices = new Uint8Array(
+                [0, 2, 4,
+                    0, 4, 6,
+                    0, 6, 8,
+                    0, 8, 10,
+                    0, 10, 2,
+                    1,2,3,
+                    2,3,4,
+                    3,4,5,
+                    4,5,6,
+                    5,6,7,
+                    6,7,8,
+                    7,8,9,
+                    8,9,10,
+                    9,10,1,
+                    10,1,2,
+                    11,1,3,
+                    11,3,5,
+                    11,5,7,
+                    11,7,9,
+                    11, 9, 1]);
+
+            // add buffers to webgl
+            // vertecies
+            this.vertexBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexPos, gl.STATIC_DRAW);
+            this.vertexBuff.itemSize = 3;
+            this.vertexBuff.numItems = 12;
+
+            // normals
+            this.normalBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexNormals, gl.STATIC_DRAW);
+            this.normalBuff.itemSize = 3;
+            this.normalBuff.numItems = 12;
+
+            // colors
+            this.colorBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexColors, gl.STATIC_DRAW);
+            this.colorBuff.itemSize = 3;
+            this.colorBuff.numItems = 12;
+
+            // triangle indicies
+            this.indexBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuff);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.triangleIndices, gl.STATIC_DRAW);
+        }
+    }
+
+    // frames per second, or time between updates, local time info
+    var updateTime = 1000 / 60; // 60fps
+    var d = new Date();
+    var tempTime = d.getMilliseconds() + d.getSeconds() * 1000;
+    var interval = 1500;  //Frequency: 0.5 HZ = 2000; 1 HZ = 1000; 2 HZ = 500;
+
+    // the canvas and it's webgl
+    var canvas;
+    var gl;
+
+    // Shader vars
+    var vertexShader;
+    var fragmentShader;
+    var groundFragShader;
+    var shaderProgram;
+    var groundShaderProgram;
+
+    var turnSpeed = 0.05;
+    var eyeOffset = 0.0;
+    var drawObjs;
+    var objShaders;
+
+    // twgl linear algebra helper
+    var m4 = twgl.m4;
+
+    // keyboard input status
+    var key_right = false;
+    var key_left = false;
+    var key_up = false;
+    var key_down = false;
+
+    // mouse position data
+    var mouseX = 0;
+    var mouseY = 0;
+
+    // initialize our varaibles and start update function
+	function init() {
+        canvas = document.getElementById('myCanvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        gl = canvas.getContext('webgl');
+        m4 = twgl.m4;
+
+        gl.getExtension('OES_standard_derivatives');
+        gl.getExtension('EXT_shader_texture_lod');
+
+	    // Compile vertex shader
+        vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader,document.getElementById("vs").text);
+        gl.compileShader(vertexShader);
+        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(vertexShader)); return null;
+        }
+
+        groundFragShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(groundFragShader, document.getElementById("ground_fs").text);
+        gl.compileShader(groundFragShader);
+        if (!gl.getShaderParameter(groundFragShader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(groundFragShader)); return null;
+        }
+	    // Compile fragment shader
+        fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader,document.getElementById("fs").text);
+        gl.compileShader(fragmentShader);
+        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(fragmentShader)); return null; }
+    
+	    // Attach the shaders and link
+        groundShaderProgram = gl.createProgram();
+        gl.attachShader(groundShaderProgram, vertexShader);
+        gl.attachShader(groundShaderProgram, groundFragShader);
+        gl.linkProgram(groundShaderProgram);
+        if (!gl.getProgramParameter(groundShaderProgram, gl.LINK_STATUS)) {
+            alert("Could not initialize shaders");
+        }
+
+	    // with the vertex shader, we need to pass it positions
+	    // as an attribute - so set up that communication
+        groundShaderProgram.PositionAttribute = gl.getAttribLocation(groundShaderProgram, "vPosition");
+        gl.enableVertexAttribArray(groundShaderProgram.PositionAttribute);
+
+        groundShaderProgram.NormalAttribute = gl.getAttribLocation(groundShaderProgram, "vNormal");
+        gl.enableVertexAttribArray(groundShaderProgram.NormalAttribute);
+
+        groundShaderProgram.ColorAttribute = gl.getAttribLocation(groundShaderProgram, "vColor");
+        gl.enableVertexAttribArray(groundShaderProgram.ColorAttribute);
+
+	    // this gives us access to the matrix uniform
+        groundShaderProgram.WorldMatrix = gl.getUniformLocation(groundShaderProgram, "uWorld");
+        groundShaderProgram.CameraMatrix = gl.getUniformLocation(groundShaderProgram, "uCamera");
+        groundShaderProgram.PerspectiveMatrix = gl.getUniformLocation(groundShaderProgram, "uPerspective");
+        
+	    // Attach the shaders and link
+        shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+            alert("Could not initialize shaders"); }
+        
+
+	    // with the vertex shader, we need to pass it positions
+	    // as an attribute - so set up that communication
+        shaderProgram.PositionAttribute = gl.getAttribLocation(shaderProgram, "vPosition");
+        gl.enableVertexAttribArray(shaderProgram.PositionAttribute);
+
+        shaderProgram.NormalAttribute = gl.getAttribLocation(shaderProgram, "vNormal");
+        gl.enableVertexAttribArray(shaderProgram.NormalAttribute);
+
+        shaderProgram.ColorAttribute = gl.getAttribLocation(shaderProgram, "vColor");
+	    gl.enableVertexAttribArray(shaderProgram.ColorAttribute);
+
+	    // this gives us access to the matrix uniform
+	    shaderProgram.WorldMatrix = gl.getUniformLocation(shaderProgram, "uWorld");
+	    shaderProgram.CameraMatrix = gl.getUniformLocation(shaderProgram, "uCamera");
+        shaderProgram.PerspectiveMatrix = gl.getUniformLocation(shaderProgram, "uPerspective");
+
+	    // bocce international standards set in mm
+	    // court 4000 x 26500
+	    // ball 107 diameter
+	    // pallino 50 diameter
+        var ico = new Icosahedron(0.0, 0.0, 0.0, 500.0, gl, [1.0, 0.0, 1.0], m4.identity());
+        var ground = new Plane(0.0, 0.0, 0.0, 4000.0, 26500.0, gl, [0.0, 1.0, 0.0], m4.setTranslation(m4.axisRotation([1.0, 0.0, 0.0], -Math.PI / 2), [0.0, -500.0, 0.0]));//m4.axisRotation([1.0, 0.0, 0.0], Math.PI/2));
+
+        drawObjs = [ico, ground];
+        objShaders = [shaderProgram,groundShaderProgram];
+        drawObjs[0].velocity = 50.0
+        drawObjs[0].trajectory = [0.0, 0.0, 1.0];
+        setTimeout(this.onUpdate, updateTime);
+    };
+
+
+    // update function
+	function onUpdate() {
+
+	    // update local time values
+	    d = new Date();
+	    tempTime = d.getMilliseconds() + d.getSeconds() * 1000 + d.getMinutes() * 60000 + d.getHours() * 60000 * 24;
+
+	    var angle = Math.PI * 2 * (tempTime % 10000) / 10000;
+	    if (key_left) {
+	        eyeOffset -= 0.05;
+	    }
+	    if (key_right) {
+	        eyeOffset += 0.05;
+	    }
+	    var eye = [drawObjs[0].x + 6000.0 * Math.cos((-Math.PI / 2 + eyeOffset) + Math.PI / 2 * (-0.5 + mouseX / canvas.width)), 6000.0 - 4500.0 * (mouseY / canvas.height), drawObjs[0].z + 6000.0 * Math.sin((-Math.PI / 2 + eyeOffset) + Math.PI / 2 * (-0.5 + mouseX / canvas.width))];
+	    var target = [drawObjs[0].x, drawObjs[0].y, drawObjs[0].z];
+	    var up = [0, 1, 0];
+
+	    var tCamera = m4.inverse(m4.lookAt(eye, target, up));
+	    var tProjection = m4.perspective(Math.PI / 4, canvas.width / canvas.height, 10, 50000);
+
+	    var dir = normalize([drawObjs[0].x - eye[0], drawObjs[0].z - eye[2]]);
+	    //var dir = normalize([drawObjs[0].x - (drawObjs[0].x + 6000.0 * Math.cos((-Math.PI / 2 + eyeOffset))), drawObjs[0].z - (drawObjs[0].z + 6000.0 * Math.sin((-Math.PI / 2 + eyeOffset)))]);
+
+	    drawObjs[0].velocity -= (0.01 + 0.05 * key_down) * drawObjs[0].velocity;
+	    if (drawObjs[0].velocity < 0.1)
+	        drawObjs[0].velocity = 0.0;
+	    if (key_up) {
+	        
+	        drawObjs[0].velocity += 1.0;
+	    };
+	    var ntrajec = [dir[0] - drawObjs[0].trajectory[0], dir[1] - drawObjs[0].trajectory[2]];
+	    drawObjs[0].trajectory[0] = drawObjs[0].trajectory[0] + ntrajec[0];
+	    drawObjs[0].trajectory[2] = drawObjs[0].trajectory[2] + ntrajec[1];
+	    drawObjs[0].trajectory = normalize(drawObjs[0].trajectory);
+	    
+	    var pre = [drawObjs[0].x, drawObjs[0].z];
+	    drawObjs[0].x = drawObjs[0].x + drawObjs[0].velocity * drawObjs[0].trajectory[0];
+	    drawObjs[0].z = drawObjs[0].z + drawObjs[0].velocity * drawObjs[0].trajectory[2];
+	    
+        
+	    
+	    //m4.axisRotate(drawObjs[0].rtx, [drawObjs[0].trajectory[2], drawObjs[0].trajectory[1], -drawObjs[0].trajectory[0]], drawObjs[0].velocity / drawObjs[0].r);
+
+	    if (drawObjs[0].x > 1500.0) {
+	        drawObjs[0].x += 1500.0 - drawObjs[0].x;
+	        //drawObjs[0].trajectory = [-Math.abs(drawObjs[0].trajectory[0]), drawObjs[0].trajectory[1], drawObjs[0].trajectory[2]];
+	        //m4.axisRotate(drawObjs[0].rtx, [drawObjs[0].trajectory[2], drawObjs[0].trajectory[1], -drawObjs[0].trajectory[0]], (2000.0 - drawObjs[0].x) / drawObjs[0].r);
+	    }
+	    if (drawObjs[0].x < -1500.0) {
+	        drawObjs[0].x += -1500.0 - drawObjs[0].x;
+	        //drawObjs[0].trajectory = [Math.abs(drawObjs[0].trajectory[0]), drawObjs[0].trajectory[1], drawObjs[0].trajectory[2]];
+	        //m4.axisRotate(drawObjs[0].rtx, [drawObjs[0].trajectory[2], drawObjs[0].trajectory[1], -drawObjs[0].trajectory[0]], (-2000.0 - drawObjs[0].x) / drawObjs[0].r);
+	    }
+	    if (drawObjs[0].z > 13000.0) {
+	        drawObjs[0].z += 13000.0 - drawObjs[0].z;
+	        //drawObjs[0].trajectory = [drawObjs[0].trajectory[0], drawObjs[0].trajectory[1], -Math.abs(drawObjs[0].trajectory[2])];
+	        //m4.axisRotate(drawObjs[0].rtx, [drawObjs[0].trajectory[2], drawObjs[0].trajectory[1], -drawObjs[0].trajectory[0]], (13000.0 - drawObjs[0].z) / drawObjs[0].r);
+	    }
+	    if (drawObjs[0].z < -13000.0) {
+	        drawObjs[0].z += -13000.0 - drawObjs[0].z;
+	        //drawObjs[0].trajectory = [drawObjs[0].trajectory[0], drawObjs[0].trajectory[1], Math.abs(drawObjs[0].trajectory[2])];
+	        //m4.axisRotate(drawObjs[0].rtx, [drawObjs[0].trajectory[2], drawObjs[0].trajectory[1], -drawObjs[0].trajectory[0]], (-13000.0 - drawObjs[0].z) / drawObjs[0].r);
+	    }
+	    //document.getElementById("display").innerHTML = '<font color="#FFFFFF">' + drawObjs[0].trajectory[0] + ' <br/> ' + drawObjs[0].trajectory[2] + '<br/>' + drawObjs[0].trajectory[2] + '<br/>' + -drawObjs[0].trajectory[0] + '</font>';
+	    var dis = Math.sqrt((drawObjs[0].x - pre[0]) * (drawObjs[0].x - pre[0]) + (drawObjs[0].z - pre[1]) * (drawObjs[0].z - pre[1]));
+	    pre[0] = drawObjs[0].x - pre[0];
+	    pre[1] = drawObjs[0].z - pre[1];
+	    pre = normalize(pre);
+	    if (isNaN(pre[0]))
+	        pre[0] = 0.0;
+	    if (isNaN(pre[1]))
+	        pre[1] = 1.0;
+	    //m4.multiply(m4.axisRotation(m4.transformDirection(m4.inverse(drawObjs[0].rtx), [drawObjs[0].trajectory[0] * Math.cos(-Math.PI / 2) - drawObjs[0].trajectory[2] * Math.sin(-Math.PI / 2), drawObjs[0].trajectory[1], drawObjs[0].trajectory[0] * Math.sin(-Math.PI / 2) + drawObjs[0].trajectory[2] * Math.cos(-Math.PI / 2)]), drawObjs[0].velocity / drawObjs[0].r), drawObjs[0].rtx, drawObjs[0].rtx);
+	    m4.multiply(m4.axisRotation(m4.transformDirection(m4.inverse(drawObjs[0].rtx), [pre[0] * Math.cos(-Math.PI / 2) - pre[1] * Math.sin(-Math.PI / 2), drawObjs[0].trajectory[1], pre[0] * Math.sin(-Math.PI / 2) + pre[1] * Math.cos(-Math.PI / 2)]), dis / drawObjs[0].r), drawObjs[0].rtx, drawObjs[0].rtx);
+	    m4.setTranslation(drawObjs[0].rtx, [drawObjs[0].x, drawObjs[0].y, drawObjs[0].z], drawObjs[0].tx);
+	    document.getElementById("display").innerHTML = '<font color="#FFFFFF">' + pre[0] + ' <br/> ' + pre[1] + '<br/>' + Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]) + '<br/>' + (drawObjs[0].trajectory[0] * Math.sin(-Math.PI / 2) + drawObjs[0].trajectory[2] * Math.cos(-Math.PI / 2)) + '</font>';
+
+	    // Clear screen, prepare for rendering
+	    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	    gl.enable(gl.DEPTH_TEST);
+	    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	    for (var i = 0; i < drawObjs.length; i++) {
+	        gl.useProgram(objShaders[i]);
+
+	        var WorldTransform = drawObjs[i].tx;
+	        var CameraTransform = m4.multiply(drawObjs[i].tx, tCamera);
+	        var PerspectiveTransform = m4.multiply(m4.multiply(drawObjs[i].tx, tCamera), tProjection);
+
+	        // Set up uniforms & attributes
+	        gl.uniformMatrix4fv(objShaders[i].WorldMatrix, false, WorldTransform);
+	        gl.uniformMatrix4fv(objShaders[i].CameraMatrix, false, CameraTransform);
+	        gl.uniformMatrix4fv(objShaders[i].PerspectiveMatrix, false, PerspectiveTransform);
+
+	        gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[i].vertexBuff);
+	        gl.vertexAttribPointer(objShaders[i].PositionAttribute, drawObjs[i].vertexBuff.itemSize, gl.FLOAT, false, 0, 0);
+
+	        gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[i].colorBuff);
+	        gl.vertexAttribPointer(objShaders[i].ColorAttribute, drawObjs[i].colorBuff.itemSize, gl.FLOAT, false, 0, 0);
+
+	        gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[i].normalBuff);
+	        gl.vertexAttribPointer(objShaders[i].NormalAttribute, drawObjs[i].normalBuff.itemSize, gl.FLOAT, false, 0, 0);
+
+	        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, drawObjs[i].indexBuff);
+
+	        // Do the drawing
+	        gl.drawElements(gl.TRIANGLES, drawObjs[i].triangleIndices.length, gl.UNSIGNED_BYTE, 0);
+	    }
+        // set next frame update
+        setTimeout(this.onUpdate, updateTime);
+    };
+
+	function normalize(array) {
+	    var tempArray = array;
+	    var length = 0.0;
+	    for (var i = 0; i < array.length; i++) {
+	        length += tempArray[i] * tempArray[i];
+	    }
+	    length = Math.sqrt(length);
+	    for (i = 0; i < array.length; i++) {
+	        tempArray[i] = tempArray[i] / length;
+	    }
+	    return tempArray;
+	}
+
+    // event for window resizing
+    function myResize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    };
+
+    // event for mouse moving
+    function myMouse(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    };
+
+    // event for keyboard key being pressed
+    function myKeyDown(e) {
+        if (e.keyCode == 68) {
+            key_right = true;
+        };
+        if (e.keyCode == 65) {
+            key_left = true;
+        };
+        if (e.keyCode == 87) {
+            key_up = true;
+        };
+        if (e.keyCode == 83) {
+            key_down = true;
+        };
+    };
+
+    // event for keyboard key being released
+    function myKeyUp(e) {
+        if (e.keyCode == 68) {
+            key_right = false;
+        };
+        if (e.keyCode == 65) {
+            key_left = false;
+        };
+        if (e.keyCode == 87) {
+            key_up = false;
+        };
+        if (e.keyCode == 83) {
+            key_down = false;
+        };
+    };
+
+    // set event listeners
+    window.onload = this.init;
+    window.onresize = this.myResize;
+    window.onmousemove = this.myMouse;
+    window.onkeydown = this.myKeyDown;
+    window.onkeyup = this.myKeyUp;
+</script>
+</html>
