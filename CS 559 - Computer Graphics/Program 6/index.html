@@ -128,7 +128,7 @@
         <canvas id="myCanvas" width="400" height="400"></canvas>
     </div>
     <div id="display" style="position:absolute; z-index:1; left:10px; top:10px">
-        <font color="#FFFFFF">A D20: By Bunny Lacey</font>
+        <font color="#FFFFFF">A D20: By Bunny Lacey<br />Click twice on video to set height bound for triangle texture<br />(I.E. try clicking just above your eye then just below it)</font>
     </div>
     <div id="display" style="position:absolute; z-index:1; right:10px; top:10px">
             <video id="video" width="320" height="240" autoplay playsinline></video>
@@ -230,7 +230,8 @@
             var latSpacing = Math.atan(1 / 2);
 
             // verticies
-            this.vertexPos = new Float32Array([x, y + r, z,
+            
+            this.vertexPos2 = new Float32Array([x, y + r, z,
                 x + r * Math.cos(latSpacing) * Math.cos(0), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(0),
                 x + r * Math.cos(latSpacing) * Math.cos(lonSpacing), y + r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing),
                 x + r * Math.cos(latSpacing) * Math.cos(lonSpacing * 2), y - r * Math.sin(latSpacing), z + r * Math.cos(latSpacing) * Math.sin(lonSpacing * 2),
@@ -244,7 +245,8 @@
                 x, y - r, z]);
 
             // normals
-            this.vertexNormals = new Float32Array([0, 1, 0,
+            
+            this.vertexNormals2 = new Float32Array([0, 1, 0,
                 Math.cos(latSpacing) * Math.cos(0), -Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(0),
                 Math.cos(latSpacing) * Math.cos(lonSpacing), Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing),
                 Math.cos(latSpacing) * Math.cos(lonSpacing * 2), -Math.sin(latSpacing), Math.cos(latSpacing) * Math.sin(lonSpacing * 2),
@@ -258,7 +260,8 @@
                 0, -1, 0]);
 
             // vertex colors
-            this.vertexColors = new Float32Array([
+            
+            this.vertexColors2 = new Float32Array([
                this.color[0], this.color[1], this.color[2],
                this.color[0], this.color[1], this.color[2],
                this.color[0], this.color[1], this.color[2],
@@ -273,21 +276,13 @@
                this.color[0], this.color[1], this.color[2]]);
 
             // vertex texture coordinates
-            this.vertexTexCoords = new Float32Array(
-                [0.5, 0.5,
-                    0.5, 1.0,
-                    0.2, 1.0,
-                    1.0, 0.8,
-                    0.8, 1.0,
-                    0.8, 0.0,
-                    1.0, 0.2,
-                    0.2, 0.0,
-                    0.5, 0.0,
-                    0.0, 0.8,
-                    0.0, 0.2,
-                    0.5, 0.5]);
             
-            this.triangleIndices = new Uint8Array(
+            this.vertexTexCoords2 = new Float32Array(
+                [0.5, 0.0,
+                    0.0, 1.0,
+                1.0, 1.0]);
+            
+            this.triangleIndices2 = new Uint8Array(
                 [0, 2, 4,
                     0, 4, 6,
                     0, 6, 8,
@@ -309,34 +304,60 @@
                     11,7,9,
                     11, 9, 1]);
 
+            // Need to loop and create unique verticies, normals, colorvals, and tex coords for each triangle
+            this.vertexPos = new Float32Array(this.triangleIndices2.length * 3);
+            this.vertexNormals = new Float32Array(this.triangleIndices2.length * 3);
+            this.vertexColors = new Float32Array(this.triangleIndices2.length * 3);
+            this.vertexTexCoords = new Float32Array(this.triangleIndices2.length * 2);
+            this.triangleIndices = new Uint8Array(this.triangleIndices2.length);
+
+            for (var i = 0; i < this.triangleIndices2.length; i++) {
+                this.vertexPos[i * 3] = this.vertexPos2[this.triangleIndices2[i] * 3];
+                this.vertexPos[i * 3 + 1] = this.vertexPos2[this.triangleIndices2[i] * 3 + 1];
+                this.vertexPos[i * 3 + 2] = this.vertexPos2[this.triangleIndices2[i] * 3 + 2];
+
+                this.vertexNormals[i * 3] = this.vertexNormals2[this.triangleIndices2[i] * 3];
+                this.vertexNormals[i * 3 + 1] = this.vertexNormals2[this.triangleIndices2[i] * 3 + 1];
+                this.vertexNormals[i * 3 + 2] = this.vertexNormals2[this.triangleIndices2[i] * 3 + 2];
+
+                this.vertexColors[i * 3] = this.vertexColors2[this.triangleIndices2[i] * 3];
+                this.vertexColors[i * 3 + 1] = this.vertexColors2[this.triangleIndices2[i] * 3 + 1];
+                this.vertexColors[i * 3 + 2] = this.vertexColors2[this.triangleIndices2[i] * 3 + 2];
+
+                this.vertexTexCoords[i * 2] = this.vertexTexCoords2[(i * 2 + 6) % 6];
+                this.vertexTexCoords[i * 2 + 1] = this.vertexTexCoords2[(i * 2 + 7) % 6];
+
+                this.triangleIndices[i] = i;
+            }
+
             // add buffers to webgl
             // vertecies
             this.vertexBuff = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuff);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexPos, gl.STATIC_DRAW);
             this.vertexBuff.itemSize = 3;
-            this.vertexBuff.numItems = 12;
+            this.vertexBuff.numItems = 60;
 
             // normals
             this.normalBuff = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuff);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexNormals, gl.STATIC_DRAW);
             this.normalBuff.itemSize = 3;
-            this.normalBuff.numItems = 12;
+            this.normalBuff.numItems = 60;
 
             // colors
             this.colorBuff = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuff);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexColors, gl.STATIC_DRAW);
             this.colorBuff.itemSize = 3;
-            this.colorBuff.numItems = 12;
+            this.colorBuff.numItems = 60;
 
             // a buffer for textures
             this.texBuff = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, this.texBuff);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexTexCoords, gl.STATIC_DRAW);
             this.texBuff.itemSize = 2;
-            this.texBuff.numItems = 12;
+            this.texBuff.numItems = 60;
 
             // triangle indicies
             this.indexBuff = gl.createBuffer();
@@ -360,6 +381,7 @@
     var vTime = 0;
     var vTimeupdate = false;
     const video = document.getElementById('video');
+    video.onclick = videoClick;
     // will set to true when video can be copied to texture
     var copyVideo = false;
     video.addEventListener('playing', function () {
@@ -399,6 +421,58 @@
     // mouse position data
     var mouseX = 0;
     var mouseY = 0;
+
+    function cumulativeOffset(element) {
+        var top = 0, left = 0;
+        do {
+            top += element.offsetTop || 0;
+            left += element.offsetLeft || 0;
+            element = element.offsetParent;
+        } while (element);
+
+        return {
+            top: top,
+            left: left
+        };
+    };
+    var vidClickX = -1;
+    var vidClickY = -1;
+    function videoClick(e) {
+        var vidPos = cumulativeOffset(video);
+        if (vidClickX != -1) {
+            
+            var height = (e.pageY - vidPos.top) - vidClickY;
+            var sideLength = Math.abs(height) / Math.sqrt(3);
+            var apothemX = Math.abs((e.pageX - vidPos.left) - vidClickX) / 2;
+            var apothemY = height / 3;
+
+            drawObjs[0].vertexTexCoords2 = new Float32Array(
+                [(vidClickX + apothemX) / video.clientWidth, vidClickY / video.clientHeight,
+                (vidClickX + apothemX - sideLength) / video.clientWidth, (e.pageY - vidPos.top) / video.clientHeight,
+                (vidClickX + apothemX + sideLength) / video.clientWidth, (e.pageY - vidPos.top) / video.clientHeight]);
+            //console.log(drawObjs[0].vertexTexCoords2);
+            //console.log(drawObjs[0].triangleIndices2.length);
+            for (var i = 0; i < drawObjs[0].triangleIndices2.length; i++) {
+                //console.log(drawObjs[0].vertexTexCoords2[(i * 2 + 6) % 6]);
+                //console.log(drawObjs[0].vertexTexCoords2[(i * 2 + 7) % 6]);
+                drawObjs[0].vertexTexCoords[i * 2] = drawObjs[0].vertexTexCoords2[(i * 2 + 6) % 6];
+                drawObjs[0].vertexTexCoords[i * 2 + 1] = drawObjs[0].vertexTexCoords2[(i * 2 + 7) % 6];
+            }
+            // a buffer for textures
+            drawObjs[0].texBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[0].texBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, drawObjs[0].vertexTexCoords, gl.STATIC_DRAW);
+            drawObjs[0].texBuff.itemSize = 2;
+            drawObjs[0].texBuff.numItems = 60;
+
+            vidClickX = -1;
+            vidClickY = -1;
+        } else {
+            vidClickX = (e.pageX - vidPos.left);
+            vidClickY = (e.pageY - vidPos.top);
+        }
+        console.log((e.pageX - vidPos.left) / video.clientWidth + " : " + (e.pageY - vidPos.top) / video.clientHeight);
+    }
 
     function checkReady() {
         if (vPlaying && vTimeupdate) {
