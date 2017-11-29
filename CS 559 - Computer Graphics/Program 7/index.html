@@ -36,216 +36,208 @@
         </div>
     </div>
     <div id="cameraStream">
-            <video id="video" style="display:none" width="320" height="240" autoplay playsinline></video>
-            <canvas id="video_canvas" width="320" height="240"></canvas>
+        <video id="video" style="display:none" width="320" height="240" autoplay playsinline></video>
+        <canvas id="video_canvas" width="320" height="240"></canvas>
     </div>
     <div id="FPSContainer"></div>
-</body>
 
-<script type="text/javascript">
-    "use strict"
+    <script type="text/javascript">
+        "use strict"
 
-    // timing variables
-    var currentTime = performance.now();
-    var lastTime = currentTime;
-    var updateTime = currentTime;
-    var frameCount = 0;
-    var fps = 1000.0 / 60.0;    // Target frames per second
-    var delta = 1.0;            // delta time multiplier between each frame
+        // timing variables
+        var currentTime = performance.now();
+        var lastTime = currentTime;
+        var updateTime = currentTime;
+        var frameCount = 0;
+        var fps = 1000.0 / 60.0;    // Target frames per second
+        var delta = 1.0;            // delta time multiplier between each frame
 
-    // pointers to user interface controls
-    const cntrl_camera = document.getElementById('cntrl_camera');         // camera selector
-    const btn_reset_camera = document.getElementById('btn_reset_camera'); // reset current camera button
-    const cntrl_view = document.getElementById('cntrl_view');             // object view selector
-    const cntrl_tod = document.getElementById('cntrl_tod');               // time of day range object
-    
-    // keyboard input status
-    var keyboard_input = new Array(128).fill(0);
-    var key_space = false;
+        // pointers to user interface controls
+        const cntrl_camera = document.getElementById('cntrl_camera');         // camera selector
+        const btn_reset_camera = document.getElementById('btn_reset_camera'); // reset current camera button
+        const cntrl_view = document.getElementById('cntrl_view');             // object view selector
+        const cntrl_tod = document.getElementById('cntrl_tod');               // time of day range object
 
-    // input variables
-    var eyeOffset = 0.0;    // adjusted by 'a' and 'w' keys
+        // keyboard input status
+        var keyboard_input = new Array(128).fill(0);
+        var key_space = false;
 
-    // mouse position data
-    var mouse = [0.0, 0.0];
+        // input variables
+        var eyeOffset = 0.0;    // adjusted by 'a' and 'w' keys
 
-    // main canvas and webgl pointer with settings
-    const canvas = document.getElementById('myCanvas');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    const gl = canvas.getContext('webgl');
-    gl.getExtension('OES_standard_derivatives');
-    gl.getExtension('EXT_shader_texture_lod');
-    gl.enable(gl.DEPTH_TEST);
+        // mouse position data
+        var mouse = [0.0, 0.0];
 
-    // twgl linear algebra helper
-    var m4 = twgl.m4;
+        // main canvas and webgl pointer with settings
+        const canvas = document.getElementById('myCanvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const gl = canvas.getContext('webgl');
+        gl.getExtension('OES_standard_derivatives');
+        gl.getExtension('EXT_shader_texture_lod');
+        gl.enable(gl.DEPTH_TEST);
 
-    // Shaders
-    const shaderScripts = document.getElementsByClassName('shader');  // array of shader scripts loaded in header
-    var shaderNames = new Array(shaderScripts.length);                // store shader names for easy referencing
-    var shaderObjects = new Array(shaderScripts.length);              // array of compiled shaders
-    // a shader program is an ordered pair of a vertex and fragment shader
-    const shaderProgramConfigurations = [['vs_simple', 'fs_video'], ['vs_simple', 'fs_checkerboard']];
-    var shaderPrograms = new Array(shaderProgramConfigurations.length);
+        // twgl linear algebra helper
+        var m4 = twgl.m4;
 
-    // Geometry
-    var ico;
-    var ground;
-    var drawingElements;    // Ordered pairs of 3d objects and the shader programs
+        // Shaders
+        const shaderScripts = document.getElementsByClassName('shader');  // array of shader scripts loaded in header
+        var shaderNames = new Array(shaderScripts.length);                // store shader names for easy referencing
+        var shaderObjects = new Array(shaderScripts.length);              // array of compiled shaders
+        // a shader program is an ordered pair of a vertex and fragment shader
+        const shaderProgramConfigurations = [['vs_simple', 'fs_video'], ['vs_simple', 'fs_checkerboard']];
+        var shaderPrograms = new Array(shaderProgramConfigurations.length);
 
-    // Textures
-    // Video texture
-    const video = document.getElementById('video');
-    var canCopyVideo = false;
-    var videoPlaying = false;
-    var videoTimeUpdating = false;
-    video.addEventListener('playing', videoPlayingEvent, true);
-    video.addEventListener('timeupdate', videoTimeUpdateEvent, true);
-    const video_canvas = document.getElementById('video_canvas');
-    const video_context = video_canvas.getContext('2d');
-    var video_texture = gl.createTexture();
-    var videoDraging = false;
-    var videoDownX = -1;
-    var videoDownY = -1;
-    video_canvas.onmousedown = videoDown;
-    video_canvas.onmousemove = videoMove;
-    video_canvas.onmouseout = videoUp;
-    video_canvas.onmouseleave = videoUp;
-    video_canvas.onmouseup = videoUp;
+        // Geometry
+        var ico;
+        var ground;
+        var drawingElements;    // Ordered pairs of 3d objects and the shader programs
 
-    // will set to true when video can be copied to texture
-    function videoPlayingEvent(e) {
-        videoPlaying = true;
-        canCopyVideo = videoTimeUpdating;
-    }
+        // Textures
+        // Video texture
+        const video = document.getElementById('video');
+        var canCopyVideo = false;
+        var videoPlaying = false;
+        var videoTimeUpdating = false;
+        video.addEventListener('playing', videoPlayingEvent, true);
+        video.addEventListener('timeupdate', videoTimeUpdateEvent, true);
+        const video_canvas = document.getElementById('video_canvas');
+        const video_context = video_canvas.getContext('2d');
+        var video_texture = gl.createTexture();
+        var videoDraging = false;
+        var videoDownX = -1;
+        var videoDownY = -1;
+        video_canvas.onmousedown = videoDown;
+        video_canvas.onmousemove = videoMove;
+        video_canvas.onmouseout = videoUp;
+        video_canvas.onmouseleave = videoUp;
+        video_canvas.onmouseup = videoUp;
 
-    function videoTimeUpdateEvent(e) {
-        videoTimeUpdating = true;
-        canCopyVideo = videoPlaying;
-    }
+        // will set to true when video can be copied to texture
+        function videoPlayingEvent(e) {
+            videoPlaying = true;
+            canCopyVideo = videoTimeUpdating;
+        }
 
-    function videoDown(e) {
-        var vidPos = cumulativeOffset(video_canvas);
-        videoDownX = (e.pageX - vidPos.left);
-        videoDownY = (e.pageY - vidPos.top);
-        videoDraging = true;
-    }
+        function videoTimeUpdateEvent(e) {
+            videoTimeUpdating = true;
+            canCopyVideo = videoPlaying;
+        }
 
-    function videoMove(e) {
-        if (videoDraging) {
+        function videoDown(e) {
             var vidPos = cumulativeOffset(video_canvas);
-            //var height = (e.pageY - vidPos.top) - videoDownY;
-            var dx = (e.pageX - vidPos.left) - videoDownX;
-            var dy = (e.pageY - vidPos.top) - videoDownY;
-            var angle = Math.atan2(dy, dx);
-            //console.log(angle);
-            var height = Math.sqrt(dx * dx + dy * dy);
-            var radius = height; //(height * 2) / 3;
-            //console.log(height);
-            //var sideLength = Math.sq//Math.tan(Math.PI / 4) * height;//Math.abs(height) / Math.sqrt(3);
-            //console.log(sideLength);
-            var apothemX = ((e.pageX - vidPos.left) - videoDownX) / 2;
-            var apothemY = height / 3;
-
-            ico.vertexTexCoords2 = new Float32Array(
-                [videoDownX / video_canvas.clientWidth, videoDownY / video_canvas.clientHeight,
-                    (videoDownX + Math.cos(angle + Math.PI / 6) * radius) / video_canvas.clientWidth, (videoDownY + Math.sin(angle + Math.PI / 6) * radius) / video_canvas.clientHeight,
-                    (videoDownX + Math.cos(angle - Math.PI / 6) * radius) / video_canvas.clientWidth, (videoDownY + Math.sin(angle - Math.PI / 6) * radius) / video_canvas.clientHeight]);
-        }
-    }
-
-    function videoUp(e) {
-        for (var i = 0; i < ico.triangleIndices2.length; i++) {
-            ico.vertexTexCoords[i * 2] = ico.vertexTexCoords2[(i * 2 + 6) % 6];
-            ico.vertexTexCoords[i * 2 + 1] = ico.vertexTexCoords2[(i * 2 + 7) % 6];
-        }
-        // a buffer for textures
-        ico.texBuff = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, ico.texBuff);
-        gl.bufferData(gl.ARRAY_BUFFER, ico.vertexTexCoords, gl.STATIC_DRAW);
-        ico.texBuff.itemSize = 2;
-        ico.texBuff.numItems = 60;
-        videoDraging = false;
-    }
-    
-    // initialize our varaibles and start update function
-    function init() {
-
-        // request access to the camera
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ video: true }).catch(function (err) { console.log(err.name + ": " + err.message); }).then(function (stream) { video.srcObject = stream; video.play(); });
+            videoDownX = (e.pageX - vidPos.left);
+            videoDownY = (e.pageY - vidPos.top);
+            videoDraging = true;
         }
 
-        // Compile shaders
-        for (var i = 0; i < shaderScripts.length; i++)
-        {
-            shaderNames[i] = shaderScripts[i].id;
-            shaderObjects[i] = (shaderScripts[i].type == "vertex") ? gl.createShader(gl.VERTEX_SHADER) : gl.createShader(gl.FRAGMENT_SHADER);
-            gl.shaderSource(shaderObjects[i], shaderScripts[i].text);
-            gl.compileShader(shaderObjects[i]);
-            if (!gl.getShaderParameter(shaderObjects[i], gl.COMPILE_STATUS)) {
-                alert(shaderScripts[i].id + " : " + gl.getShaderInfoLog(shaderObjects[i]));
-                return null;
+        function videoMove(e) {
+            if (videoDraging) {
+                var vidPos = cumulativeOffset(video_canvas);
+                var dx = (e.pageX - vidPos.left) - videoDownX;
+                var dy = (e.pageY - vidPos.top) - videoDownY;
+                var angle = Math.atan2(dy, dx);
+                var height = Math.sqrt(dx * dx + dy * dy);
+                var radius = (height * 2) / 3;
+                var apothemX = videoDownX + Math.cos(angle) * (height - height / 3);
+                var apothemY = videoDownY + Math.sin(angle) * (height - height / 3);
+
+                ico.vertexTexCoords2 = new Float32Array(
+                    [videoDownX / video_canvas.clientWidth, videoDownY / video_canvas.clientHeight,
+                    (apothemX + Math.cos(angle + Math.PI / 3) * radius) / video_canvas.clientWidth, (apothemY + Math.sin(angle + Math.PI / 3) * radius) / video_canvas.clientHeight,
+                    (apothemX + Math.cos(angle - Math.PI / 3) * radius) / video_canvas.clientWidth, (apothemY + Math.sin(angle - Math.PI / 3) * radius) / video_canvas.clientHeight]);
             }
         }
 
-        // Create shader programs
-        for (var i = 0; i < shaderProgramConfigurations.length; i++)
-        {
-            shaderPrograms[i] = gl.createProgram();
-            gl.attachShader(shaderPrograms[i], shaderObjects[shaderNames.indexOf(shaderProgramConfigurations[i][0])]);    // vertext shader
-            gl.attachShader(shaderPrograms[i], shaderObjects[shaderNames.indexOf(shaderProgramConfigurations[i][1])]);    // fragment shader
-            gl.linkProgram(shaderPrograms[i]);
-            if (!gl.getProgramParameter(shaderPrograms[i], gl.LINK_STATUS)) {
-                alert("Could not initialize shaders");
+        function videoUp(e) {
+            for (var i = 0; i < ico.triangleIndices2.length; i++) {
+                ico.vertexTexCoords[i * 2] = ico.vertexTexCoords2[(i * 2 + 6) % 6];
+                ico.vertexTexCoords[i * 2 + 1] = ico.vertexTexCoords2[(i * 2 + 7) % 6];
             }
-            // uniforms
-            shaderPrograms[i].SunVector = gl.getUniformLocation(shaderPrograms[i], "uSun");
-            shaderPrograms[i].WorldMatrix = gl.getUniformLocation(shaderPrograms[i], "uWorld");
-            shaderPrograms[i].CameraMatrix = gl.getUniformLocation(shaderPrograms[i], "uCamera");
-            shaderPrograms[i].PerspectiveMatrix = gl.getUniformLocation(shaderPrograms[i], "uPerspective");
-            // attributes
-            shaderPrograms[i].PositionAttribute = gl.getAttribLocation(shaderPrograms[i], "vPosition");
-            shaderPrograms[i].NormalAttribute = gl.getAttribLocation(shaderPrograms[i], "vNormal");
-            shaderPrograms[i].ColorAttribute = gl.getAttribLocation(shaderPrograms[i], "vColor");
-            shaderPrograms[i].TexCoorAttribute = gl.getAttribLocation(shaderPrograms[i], "vTexCoord");
-            // enable attributes
-            gl.enableVertexAttribArray(shaderPrograms[i].PositionAttribute);
-            gl.enableVertexAttribArray(shaderPrograms[i].NormalAttribute);
-            gl.enableVertexAttribArray(shaderPrograms[i].ColorAttribute);
-            gl.enableVertexAttribArray(shaderPrograms[i].TexCoorAttribute);
+            // a buffer for textures
+            ico.texBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, ico.texBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, ico.vertexTexCoords, gl.STATIC_DRAW);
+            ico.texBuff.itemSize = 2;
+            ico.texBuff.numItems = 60;
+            videoDraging = false;
         }
 
-        // Set up textures
-        // video texture
-        gl.bindTexture(gl.TEXTURE_2D, video_texture);
-        var pixel = new Uint8Array([255, 0, 0, 255]);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        
-        // Set up geometry
-        ico = new Icosahedron(0.0, 0.0, 0.0, 500.0, gl, [1.0, 0.0, 1.0], m4.identity(), "Video Ball");
-        ico.velocities = [0.0, 0.0, 50.0];
-        ico.trajectory = [0.0, 0.0, 1.0];
-        ground = new Plane(0.0, 0.0, 0.0, 26500.0, 26500.0, gl, [0.0, 1.0, 0.0], m4.setTranslation(m4.axisRotation([1.0, 0.0, 0.0], -Math.PI / 2), [0.0, -500.0, 0.0]), "Ground");
+        // initialize our varaibles and start update function
+        function init() {
 
-        drawingElements = [[ico, 0], [ground, 1]];
+            // request access to the camera
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true }).catch(function (err) { console.log(err.name + ": " + err.message); }).then(function (stream) { video.srcObject = stream; video.play(); });
+            }
 
-        for (var i = 0; i < drawingElements.length; i++) {
-            var tempOption = document.createElement('option');
-            tempOption.text = drawingElements[i][0].name;
-            tempOption.value = i;
-            cntrl_view.add(tempOption);
-        }
+            // Compile shaders
+            for (var i = 0; i < shaderScripts.length; i++) {
+                shaderNames[i] = shaderScripts[i].id;
+                shaderObjects[i] = (shaderScripts[i].type == "vertex") ? gl.createShader(gl.VERTEX_SHADER) : gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(shaderObjects[i], shaderScripts[i].text);
+                gl.compileShader(shaderObjects[i]);
+                if (!gl.getShaderParameter(shaderObjects[i], gl.COMPILE_STATUS)) {
+                    alert(shaderScripts[i].id + " : " + gl.getShaderInfoLog(shaderObjects[i]));
+                    return null;
+                }
+            }
 
-        window.requestAnimationFrame(update);
-    };
+            // Create shader programs
+            for (var i = 0; i < shaderProgramConfigurations.length; i++) {
+                shaderPrograms[i] = gl.createProgram();
+                gl.attachShader(shaderPrograms[i], shaderObjects[shaderNames.indexOf(shaderProgramConfigurations[i][0])]);    // vertext shader
+                gl.attachShader(shaderPrograms[i], shaderObjects[shaderNames.indexOf(shaderProgramConfigurations[i][1])]);    // fragment shader
+                gl.linkProgram(shaderPrograms[i]);
+                if (!gl.getProgramParameter(shaderPrograms[i], gl.LINK_STATUS)) {
+                    alert("Could not initialize shaders");
+                }
+                // uniforms
+                shaderPrograms[i].SunVector = gl.getUniformLocation(shaderPrograms[i], "uSun");
+                shaderPrograms[i].WorldMatrix = gl.getUniformLocation(shaderPrograms[i], "uWorld");
+                shaderPrograms[i].CameraMatrix = gl.getUniformLocation(shaderPrograms[i], "uCamera");
+                shaderPrograms[i].PerspectiveMatrix = gl.getUniformLocation(shaderPrograms[i], "uPerspective");
+                // attributes
+                shaderPrograms[i].PositionAttribute = gl.getAttribLocation(shaderPrograms[i], "vPosition");
+                shaderPrograms[i].NormalAttribute = gl.getAttribLocation(shaderPrograms[i], "vNormal");
+                shaderPrograms[i].ColorAttribute = gl.getAttribLocation(shaderPrograms[i], "vColor");
+                shaderPrograms[i].TexCoorAttribute = gl.getAttribLocation(shaderPrograms[i], "vTexCoord");
+                // enable attributes
+                gl.enableVertexAttribArray(shaderPrograms[i].PositionAttribute);
+                gl.enableVertexAttribArray(shaderPrograms[i].NormalAttribute);
+                gl.enableVertexAttribArray(shaderPrograms[i].ColorAttribute);
+                gl.enableVertexAttribArray(shaderPrograms[i].TexCoorAttribute);
+            }
 
-    // update function
-    function update() {
+            // Set up textures
+            // video texture
+            gl.bindTexture(gl.TEXTURE_2D, video_texture);
+            var pixel = new Uint8Array([255, 0, 0, 255]);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+            // Set up geometry
+            ico = new Icosahedron(0.0, 0.0, 0.0, 500.0, gl, [1.0, 0.0, 1.0], m4.identity(), "Video Ball");
+            ico.velocities = [0.0, 0.0, 50.0];
+            ico.trajectory = [0.0, 0.0, 1.0];
+            ground = new Plane(0.0, 0.0, 0.0, 26500.0, 26500.0, gl, [0.0, 1.0, 0.0], m4.setTranslation(m4.axisRotation([1.0, 0.0, 0.0], -Math.PI / 2), [0.0, -500.0, 0.0]), "Ground");
+
+            drawingElements = [[ico, 0], [ground, 1]];
+
+            for (var i = 0; i < drawingElements.length; i++) {
+                var tempOption = document.createElement('option');
+                tempOption.text = drawingElements[i][0].name;
+                tempOption.value = i;
+                cntrl_view.add(tempOption);
+            }
+
+            window.requestAnimationFrame(update);
+        };
+
+        // update function
+        function update() {
             // update local time values, delta variable, and fps counter
             currentTime = performance.now();
             if (currentTime - updateTime > 500) {
@@ -277,11 +269,11 @@
                     video_context.lineTo(mouse[0] - vidPos.left, mouse[1] - vidPos.top);
                     video_context.stroke();
                 }
-                
+
                 gl.bindTexture(gl.TEXTURE_2D, video_texture);
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
             }
-	    
+
             if (keyboard_input[65]) {
                 eyeOffset -= 0.05 * delta;
             }
@@ -355,7 +347,7 @@
 
             for (var i = 0; i < drawingElements.length; i++) {
                 gl.useProgram(shaderPrograms[drawingElements[i][1]]);
-                
+
                 var WorldTransform = drawingElements[i][0].tx;
                 var CameraTransform = m4.multiply(drawingElements[i][0].tx, tCamera);
                 var PerspectiveTransform = m4.multiply(m4.multiply(drawingElements[i][0].tx, tCamera), tProjection);
@@ -384,87 +376,88 @@
                 gl.drawElements(gl.TRIANGLES, drawingElements[i][0].triangleIndices.length, gl.UNSIGNED_BYTE, 0);
             }
             window.requestAnimationFrame(update);
-    };
-
-    /*
-            UTILITIES
-    */
-
-    // returns screen coordinates of DOM element
-    function cumulativeOffset(element) {
-        var top = 0, left = 0;
-        do {
-            top += element.offsetTop || 0;
-            left += element.offsetLeft || 0;
-            element = element.offsetParent;
-        } while (element);
-
-        return {
-            top: top,
-            left: left
         };
-    };
 
-    // converts array values into unit length
-	function normalize(array) {
-	    var tempArray = array;
-	    var length = 0.0;
-	    for (var i = 0; i < array.length; i++) {
-	        length += tempArray[i] * tempArray[i];
-	    }
-	    length = Math.sqrt(length);
-	    for (i = 0; i < array.length; i++) {
-	        tempArray[i] = tempArray[i] / length;
-	    }
-	    return tempArray;
-    }
+        /*
+                UTILITIES
+        */
 
-    /*
-            EVENT HANDLERS
-    */
+        // returns screen coordinates of DOM element
+        function cumulativeOffset(element) {
+            var top = 0, left = 0;
+            do {
+                top += element.offsetTop || 0;
+                left += element.offsetLeft || 0;
+                element = element.offsetParent;
+            } while (element);
 
-    // event for window resizing
-    function myResize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    };
-
-    // event for mouse moving
-    function myMouse(e) {
-        mouse[0] = e.clientX;
-        mouse[1] = e.clientY;
-    };
-    
-    // event for keyboard key being pressed
-    function myKeyDown(e) {
-        try {
-            keyboard_input[e.keyCode] = 1;
-            if (keyboard_input[32]) {
-                ico.velocities[1] += 300.0 * (1 - key_space) * (ico.position[1] == 0.0);
-                key_space = true;
+            return {
+                top: top,
+                left: left
             };
-        } catch (e) {
-            console.log(e);
-        }
-    };
+        };
 
-    // event for keyboard key being released
-    function myKeyUp(e) {
-        try {
-            keyboard_input[e.keyCode] = 0;
-            if (e.keyCode == 32) {
-                key_space = false;
-            };
-        } catch (e) {
-            console.log(e);
+        // converts array values into unit length
+        function normalize(array) {
+            var tempArray = array;
+            var length = 0.0;
+            for (var i = 0; i < array.length; i++) {
+                length += tempArray[i] * tempArray[i];
+            }
+            length = Math.sqrt(length);
+            for (i = 0; i < array.length; i++) {
+                tempArray[i] = tempArray[i] / length;
+            }
+            return tempArray;
         }
-    };
 
-    // set event listeners
-    window.onload = this.init;
-    window.onresize = this.myResize;
-    window.onmousemove = this.myMouse;
-    window.onkeydown = this.myKeyDown;
-    window.onkeyup = this.myKeyUp;
-</script>
+        /*
+                EVENT HANDLERS
+        */
+
+        // event for window resizing
+        function myResize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+
+        // event for mouse moving
+        function myMouse(e) {
+            mouse[0] = e.clientX;
+            mouse[1] = e.clientY;
+        };
+
+        // event for keyboard key being pressed
+        function myKeyDown(e) {
+            try {
+                keyboard_input[e.keyCode] = 1;
+                if (keyboard_input[32]) {
+                    ico.velocities[1] += 300.0 * (1 - key_space) * (ico.position[1] == 0.0);
+                    key_space = true;
+                };
+            } catch (e) {
+                console.log(e);
+            }
+        };
+
+        // event for keyboard key being released
+        function myKeyUp(e) {
+            try {
+                keyboard_input[e.keyCode] = 0;
+                if (e.keyCode == 32) {
+                    key_space = false;
+                };
+            } catch (e) {
+                console.log(e);
+            }
+        };
+
+        // set event listeners
+        window.onload = this.init;
+        window.onresize = this.myResize;
+        window.onmousemove = this.myMouse;
+        window.onkeydown = this.myKeyDown;
+        window.onkeyup = this.myKeyUp;
+    </script>
+</body>
 </html>
