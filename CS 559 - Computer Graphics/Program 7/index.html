@@ -97,6 +97,11 @@
     // Textures
     // Video texture
     const video = document.getElementById('video');
+    var canCopyVideo = false;
+    var videoPlaying = false;
+    var videoTimeUpdating = false;
+    video.addEventListener('playing', videoPlayingEvent, true);
+    video.addEventListener('timeupdate', videoTimeUpdateEvent, true);
     const video_canvas = document.getElementById('video_canvas');
     const video_context = video_canvas.getContext('2d');
     var video_texture = gl.createTexture();
@@ -108,8 +113,18 @@
     video_canvas.onmouseout = videoUp;
     video_canvas.onmouseleave = videoUp;
     video_canvas.onmouseup = videoUp;
-    //video_canvas.onclick = videoClick;
+
     // will set to true when video can be copied to texture
+    function videoPlayingEvent(e) {
+        videoPlaying = true;
+        canCopyVideo = videoTimeUpdating && videoPlaying;
+    }
+
+    function videoTimeUpdateEvent(e) {
+        videoTimeUpdating = true;
+        canCopyVideo = videoTimeUpdating && videoPlaying;
+    }
+
     function videoDown(e) {
         var vidPos = cumulativeOffset(video_canvas);
         videoDownX = (e.pageX - vidPos.left);
@@ -145,41 +160,7 @@
         ico.texBuff.numItems = 60;
         videoDraging = false;
     }
-
-    var vidClickX = -1;
-    var vidClickY = -1;
-    function videoClick(e) {
-        var vidPos = cumulativeOffset(video_canvas);
-        if (vidClickX != -1) {
-            
-            var height = (e.pageY - vidPos.top) - vidClickY;
-            var sideLength = Math.abs(height) / Math.sqrt(3);
-            var apothemX = Math.abs((e.pageX - vidPos.left) - vidClickX) / 2;
-            var apothemY = height / 3;
-
-            ico.vertexTexCoords2 = new Float32Array(
-                [(vidClickX + apothemX) / video_canvas.clientWidth, vidClickY / video_canvas.clientHeight,
-                    (vidClickX + apothemX - sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight,
-                    (vidClickX + apothemX + sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight]);
-            for (var i = 0; i < ico.triangleIndices2.length; i++) {
-                ico.vertexTexCoords[i * 2] = ico.vertexTexCoords2[(i * 2 + 6) % 6];
-                ico.vertexTexCoords[i * 2 + 1] = ico.vertexTexCoords2[(i * 2 + 7) % 6];
-            }
-            // a buffer for textures
-            ico.texBuff = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, ico.texBuff);
-            gl.bufferData(gl.ARRAY_BUFFER, ico.vertexTexCoords, gl.STATIC_DRAW);
-            ico.texBuff.itemSize = 2;
-            ico.texBuff.numItems = 60;
-
-            vidClickX = -1;
-            vidClickY = -1;
-        } else {
-            vidClickX = (e.pageX - vidPos.left);
-            vidClickY = (e.pageY - vidPos.top);
-        }
-    }
-
+    
     // initialize our varaibles and start update function
     function init() {
 
@@ -268,7 +249,7 @@
             lastTime = currentTime;
             frameCount++;
 
-            if (!video.paused) {
+            if (canCopyVideo) {
                 video_canvas.width = video_canvas.width;
                 video_context.drawImage(video, 0.0, 0.0, 320.0, 240.0);
                 video_context.beginPath();
