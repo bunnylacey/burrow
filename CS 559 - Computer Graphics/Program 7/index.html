@@ -85,14 +85,14 @@
     const shaderScripts = document.getElementsByClassName('shader');  // array of shader scripts loaded in header
     var shaderNames = new Array(shaderScripts.length);                // store shader names for easy referencing
     var shaderObjects = new Array(shaderScripts.length);              // array of compiled shaders
-    // a shader program is a combination of a vertex and fragment shader
+    // a shader program is an ordered pair of a vertex and fragment shader
     const shaderProgramConfigurations = [['vs_simple', 'fs_video'], ['vs_simple', 'fs_checkerboard']];
     var shaderPrograms = new Array(shaderProgramConfigurations.length);
 
     // Geometry
     var ico;
     var ground;
-    var drawingElements;    // Ordered pairs of 3d objects and the shader program to use to render them;
+    var drawingElements;    // Ordered pairs of 3d objects and the shader programs
 
     // Textures
     // Video texture
@@ -117,12 +117,12 @@
     // will set to true when video can be copied to texture
     function videoPlayingEvent(e) {
         videoPlaying = true;
-        canCopyVideo = videoTimeUpdating && videoPlaying;
+        canCopyVideo = videoTimeUpdating;
     }
 
     function videoTimeUpdateEvent(e) {
         videoTimeUpdating = true;
-        canCopyVideo = videoTimeUpdating && videoPlaying;
+        canCopyVideo = videoPlaying;
     }
 
     function videoDown(e) {
@@ -135,15 +135,23 @@
     function videoMove(e) {
         if (videoDraging) {
             var vidPos = cumulativeOffset(video_canvas);
-            var height = (e.pageY - vidPos.top) - videoDownY;
-            var sideLength = Math.abs(height) / Math.sqrt(3);
+            //var height = (e.pageY - vidPos.top) - videoDownY;
+            var dx = (e.pageX - vidPos.left) - videoDownX;
+            var dy = (e.pageY - vidPos.top) - videoDownY;
+            var angle = Math.atan2(dy, dx);
+            //console.log(angle);
+            var height = Math.sqrt(dx * dx + dy * dy);
+            var radius = height; //(height * 2) / 3;
+            //console.log(height);
+            //var sideLength = Math.sq//Math.tan(Math.PI / 4) * height;//Math.abs(height) / Math.sqrt(3);
+            //console.log(sideLength);
             var apothemX = ((e.pageX - vidPos.left) - videoDownX) / 2;
             var apothemY = height / 3;
 
             ico.vertexTexCoords2 = new Float32Array(
-                [(videoDownX + apothemX) / video_canvas.clientWidth, videoDownY / video_canvas.clientHeight,
-                (videoDownX + apothemX - sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight,
-                (videoDownX + apothemX + sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight]);
+                [videoDownX / video_canvas.clientWidth, videoDownY / video_canvas.clientHeight,
+                    (videoDownX + Math.cos(angle + Math.PI / 6) * radius) / video_canvas.clientWidth, (videoDownY + Math.sin(angle + Math.PI / 6) * radius) / video_canvas.clientHeight,
+                    (videoDownX + Math.cos(angle - Math.PI / 6) * radius) / video_canvas.clientWidth, (videoDownY + Math.sin(angle - Math.PI / 6) * radius) / video_canvas.clientHeight]);
         }
     }
 
