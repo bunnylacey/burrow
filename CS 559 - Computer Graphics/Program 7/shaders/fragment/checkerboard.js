@@ -1,6 +1,7 @@
 var script = document.createElement('script');
 script.id = 'fs_checkerboard';
-script.type = 'not-js';
+script.className = 'shader';
+script.type = 'fragment';
 script.text = `
     precision highp float;
     

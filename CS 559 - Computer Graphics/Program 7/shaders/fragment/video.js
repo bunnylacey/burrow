@@ -1,6 +1,7 @@
 var script = document.createElement('script');
 script.id = 'fs_video';
-script.type = 'not-js';
+script.className = 'shader';
+script.type = 'fragment';
 script.text = `
     #extension GL_EXT_shader_texture_lod : enable
     #extension GL_OES_standard_derivatives : enable

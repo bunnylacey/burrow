@@ -1,6 +1,7 @@
 var script = document.createElement('script');
 script.id = 'vs_simple';
-script.type = 'not-js';
+script.className = 'shader';
+script.type = 'vertex';
 script.text = `
     precision highp float;
 

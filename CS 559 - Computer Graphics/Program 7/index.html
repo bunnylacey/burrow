@@ -8,16 +8,16 @@
     <link rel="stylesheet" type="text/css" href="incl/style.css" />
     
     <!-- load shaders into header -->
-    <script src="shaders/vertex/simple.js"></script>
-    <script src="shaders/fragment/checkerboard.js"></script>
-    <script src="shaders/fragment/video.js"></script>
+    <script type="text/javascript" src="shaders/vertex/simple.js"></script>
+    <script type="text/javascript" src="shaders/fragment/checkerboard.js"></script>
+    <script type="text/javascript" src="shaders/fragment/video.js"></script>
     
     <!-- load 3d object classes -->
-    <script src="objects/Icosahedron.js"></script>
-    <script src="objects/Plane.js"></script>
+    <script type="text/javascript" src="objects/Icosahedron.js"></script>
+    <script type="text/javascript" src="objects/Plane.js"></script>
 
     <!-- load TWGL -->
-    <script src="https://graphics.cs.wisc.edu/JS/twgl-full.min.js"></script>
+    <script type="text/javascript" src="https://graphics.cs.wisc.edu/JS/twgl-full.min.js"></script>
 </head>
 <body>
     <div id="canvasContainer">
@@ -27,7 +27,7 @@
         Graphics Town: By Bunny Lacey<br />
         Use WASD to move, space bar to jump<br />
         Webcam enable for video texture on ball.<br />
-        Try clicking just above then below your eye in the video feed.<br />
+        Click and drag on video to set texture triangle.<br />
         <div id="controlsContainer">
             Camera:<select id="cntrl_camera"><option>Ball</option></select>:<button id="btn_reset_camera">Reset Camera</button><br />
             View:<select id="cntrl_view"><option value="-1">World</option></select><br />
@@ -36,12 +36,13 @@
         </div>
     </div>
     <div id="cameraStream">
-            <video id="video" width="320" height="240" autoplay playsinline></video>
+            <video id="video" style="display:none" width="320" height="240" autoplay playsinline></video>
+            <canvas id="video_canvas" width="320" height="240"></canvas>
     </div>
     <div id="FPSContainer"></div>
 </body>
 
-<script>
+<script type="text/javascript">
     "use strict"
 
     // timing variables
@@ -62,56 +63,93 @@
     var keyboard_input = new Array(128).fill(0);
     var key_space = false;
 
-    // mouse position data
-    var mouseX = 0;
-    var mouseY = 0;
+    // input variables
+    var eyeOffset = 0.0;    // adjusted by 'a' and 'w' keys
 
-    // main canvas and webgl pointer
+    // mouse position data
+    var mouse = [0.0, 0.0];
+
+    // main canvas and webgl pointer with settings
     const canvas = document.getElementById('myCanvas');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     const gl = canvas.getContext('webgl');
     gl.getExtension('OES_standard_derivatives');
     gl.getExtension('EXT_shader_texture_lod');
+    gl.enable(gl.DEPTH_TEST);
 
     // twgl linear algebra helper
     var m4 = twgl.m4;
 
-    var vPlaying = false;
-    var vTime = 0;
-    var vTimeupdate = false;
+    // Shaders
+    const shaderScripts = document.getElementsByClassName('shader');  // array of shader scripts loaded in header
+    var shaderNames = new Array(shaderScripts.length);                // store shader names for easy referencing
+    var shaderObjects = new Array(shaderScripts.length);              // array of compiled shaders
+    // a shader program is a combination of a vertex and fragment shader
+    const shaderProgramConfigurations = [['vs_simple', 'fs_video'], ['vs_simple', 'fs_checkerboard']];
+    var shaderPrograms = new Array(shaderProgramConfigurations.length);
+
+    // Geometry
+    var ico;
+    var ground;
+    var drawingElements;    // Ordered pairs of 3d objects and the shader program to use to render them;
+
+    // Textures
+    // Video texture
     const video = document.getElementById('video');
-    video.onclick = videoClick;
+    const video_canvas = document.getElementById('video_canvas');
+    const video_context = video_canvas.getContext('2d');
+    var video_texture = gl.createTexture();
+    var videoDraging = false;
+    var videoDownX = -1;
+    var videoDownY = -1;
+    video_canvas.onmousedown = videoDown;
+    video_canvas.onmousemove = videoMove;
+    video_canvas.onmouseout = videoUp;
+    video_canvas.onmouseleave = videoUp;
+    video_canvas.onmouseup = videoUp;
+    //video_canvas.onclick = videoClick;
     // will set to true when video can be copied to texture
-    var copyVideo = false;
-    video.addEventListener('playing', function () {
-        vPlaying = true;
-        checkReady();
-    }, true);
+    function videoDown(e) {
+        var vidPos = cumulativeOffset(video_canvas);
+        videoDownX = (e.pageX - vidPos.left);
+        videoDownY = (e.pageY - vidPos.top);
+        videoDraging = true;
+    }
 
-    video.addEventListener('timeupdate', function () {
-        vTimeupdate = true;
-        checkReady();
-    }, true);
-    var vTexture, depthTexture;
-    var vImage;
+    function videoMove(e) {
+        if (videoDraging) {
+            var vidPos = cumulativeOffset(video_canvas);
+            var height = (e.pageY - vidPos.top) - videoDownY;
+            var sideLength = Math.abs(height) / Math.sqrt(3);
+            var apothemX = ((e.pageX - vidPos.left) - videoDownX) / 2;
+            var apothemY = height / 3;
 
-    // Shader vars
-    var frameBuffer;
-    var vertexShader;
-    var fragmentShader;
-    var groundFragShader;
-    var shaderProgram;
-    var groundShaderProgram;
-    
-    var eyeOffset = 0.0;
-    var drawObjs;
-    var objShaders;
-    
+            ico.vertexTexCoords2 = new Float32Array(
+                [(videoDownX + apothemX) / video_canvas.clientWidth, videoDownY / video_canvas.clientHeight,
+                (videoDownX + apothemX - sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight,
+                (videoDownX + apothemX + sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight]);
+        }
+    }
+
+    function videoUp(e) {
+        for (var i = 0; i < ico.triangleIndices2.length; i++) {
+            ico.vertexTexCoords[i * 2] = ico.vertexTexCoords2[(i * 2 + 6) % 6];
+            ico.vertexTexCoords[i * 2 + 1] = ico.vertexTexCoords2[(i * 2 + 7) % 6];
+        }
+        // a buffer for textures
+        ico.texBuff = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, ico.texBuff);
+        gl.bufferData(gl.ARRAY_BUFFER, ico.vertexTexCoords, gl.STATIC_DRAW);
+        ico.texBuff.itemSize = 2;
+        ico.texBuff.numItems = 60;
+        videoDraging = false;
+    }
+
     var vidClickX = -1;
     var vidClickY = -1;
     function videoClick(e) {
-        var vidPos = cumulativeOffset(video);
+        var vidPos = cumulativeOffset(video_canvas);
         if (vidClickX != -1) {
             
             var height = (e.pageY - vidPos.top) - vidClickY;
@@ -119,20 +157,20 @@
             var apothemX = Math.abs((e.pageX - vidPos.left) - vidClickX) / 2;
             var apothemY = height / 3;
 
-            drawObjs[0].vertexTexCoords2 = new Float32Array(
-                [(vidClickX + apothemX) / video.clientWidth, vidClickY / video.clientHeight,
-                (vidClickX + apothemX - sideLength) / video.clientWidth, (e.pageY - vidPos.top) / video.clientHeight,
-                (vidClickX + apothemX + sideLength) / video.clientWidth, (e.pageY - vidPos.top) / video.clientHeight]);
-            for (var i = 0; i < drawObjs[0].triangleIndices2.length; i++) {
-                drawObjs[0].vertexTexCoords[i * 2] = drawObjs[0].vertexTexCoords2[(i * 2 + 6) % 6];
-                drawObjs[0].vertexTexCoords[i * 2 + 1] = drawObjs[0].vertexTexCoords2[(i * 2 + 7) % 6];
+            ico.vertexTexCoords2 = new Float32Array(
+                [(vidClickX + apothemX) / video_canvas.clientWidth, vidClickY / video_canvas.clientHeight,
+                    (vidClickX + apothemX - sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight,
+                    (vidClickX + apothemX + sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight]);
+            for (var i = 0; i < ico.triangleIndices2.length; i++) {
+                ico.vertexTexCoords[i * 2] = ico.vertexTexCoords2[(i * 2 + 6) % 6];
+                ico.vertexTexCoords[i * 2 + 1] = ico.vertexTexCoords2[(i * 2 + 7) % 6];
             }
             // a buffer for textures
-            drawObjs[0].texBuff = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[0].texBuff);
-            gl.bufferData(gl.ARRAY_BUFFER, drawObjs[0].vertexTexCoords, gl.STATIC_DRAW);
-            drawObjs[0].texBuff.itemSize = 2;
-            drawObjs[0].texBuff.numItems = 60;
+            ico.texBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, ico.texBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, ico.vertexTexCoords, gl.STATIC_DRAW);
+            ico.texBuff.itemSize = 2;
+            ico.texBuff.numItems = 60;
 
             vidClickX = -1;
             vidClickY = -1;
@@ -142,122 +180,74 @@
         }
     }
 
-    function checkReady() {
-        if (vPlaying && vTimeupdate) {
-            copyVideo = true;
-        }
-    }
-
     // initialize our varaibles and start update function
     function init() {
 
-        // rquest access to the camera
+        // request access to the camera
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             navigator.mediaDevices.getUserMedia({ video: true }).catch(function (err) { console.log(err.name + ": " + err.message); }).then(function (stream) { video.srcObject = stream; video.play(); });
         }
 
-	    // Compile vertex shader
-        vertexShader = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vertexShader,document.getElementById("vs_simple").text);
-        gl.compileShader(vertexShader);
-        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-            alert(gl.getShaderInfoLog(vertexShader)); return null;
+        // Compile shaders
+        for (var i = 0; i < shaderScripts.length; i++)
+        {
+            shaderNames[i] = shaderScripts[i].id;
+            shaderObjects[i] = (shaderScripts[i].type == "vertex") ? gl.createShader(gl.VERTEX_SHADER) : gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(shaderObjects[i], shaderScripts[i].text);
+            gl.compileShader(shaderObjects[i]);
+            if (!gl.getShaderParameter(shaderObjects[i], gl.COMPILE_STATUS)) {
+                alert(shaderScripts[i].id + " : " + gl.getShaderInfoLog(shaderObjects[i]));
+                return null;
+            }
         }
 
-        groundFragShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(groundFragShader, document.getElementById("fs_checkerboard").text);
-        gl.compileShader(groundFragShader);
-        if (!gl.getShaderParameter(groundFragShader, gl.COMPILE_STATUS)) {
-            alert(gl.getShaderInfoLog(groundFragShader)); return null;
+        // Create shader programs
+        for (var i = 0; i < shaderProgramConfigurations.length; i++)
+        {
+            shaderPrograms[i] = gl.createProgram();
+            gl.attachShader(shaderPrograms[i], shaderObjects[shaderNames.indexOf(shaderProgramConfigurations[i][0])]);    // vertext shader
+            gl.attachShader(shaderPrograms[i], shaderObjects[shaderNames.indexOf(shaderProgramConfigurations[i][1])]);    // fragment shader
+            gl.linkProgram(shaderPrograms[i]);
+            if (!gl.getProgramParameter(shaderPrograms[i], gl.LINK_STATUS)) {
+                alert("Could not initialize shaders");
+            }
+            // uniforms
+            shaderPrograms[i].SunVector = gl.getUniformLocation(shaderPrograms[i], "uSun");
+            shaderPrograms[i].WorldMatrix = gl.getUniformLocation(shaderPrograms[i], "uWorld");
+            shaderPrograms[i].CameraMatrix = gl.getUniformLocation(shaderPrograms[i], "uCamera");
+            shaderPrograms[i].PerspectiveMatrix = gl.getUniformLocation(shaderPrograms[i], "uPerspective");
+            // attributes
+            shaderPrograms[i].PositionAttribute = gl.getAttribLocation(shaderPrograms[i], "vPosition");
+            shaderPrograms[i].NormalAttribute = gl.getAttribLocation(shaderPrograms[i], "vNormal");
+            shaderPrograms[i].ColorAttribute = gl.getAttribLocation(shaderPrograms[i], "vColor");
+            shaderPrograms[i].TexCoorAttribute = gl.getAttribLocation(shaderPrograms[i], "vTexCoord");
+            // enable attributes
+            gl.enableVertexAttribArray(shaderPrograms[i].PositionAttribute);
+            gl.enableVertexAttribArray(shaderPrograms[i].NormalAttribute);
+            gl.enableVertexAttribArray(shaderPrograms[i].ColorAttribute);
+            gl.enableVertexAttribArray(shaderPrograms[i].TexCoorAttribute);
         }
-	    // Compile fragment shader
-        fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fragmentShader,document.getElementById("fs_video").text);
-        gl.compileShader(fragmentShader);
-        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-            alert(gl.getShaderInfoLog(fragmentShader)); return null; }
-    
-	    // Attach the shaders and link
-        groundShaderProgram = gl.createProgram();
-        gl.attachShader(groundShaderProgram, vertexShader);
-        gl.attachShader(groundShaderProgram, groundFragShader);
-        gl.linkProgram(groundShaderProgram);
-        if (!gl.getProgramParameter(groundShaderProgram, gl.LINK_STATUS)) {
-            alert("Could not initialize shaders");
-        }
 
-	    // with the vertex shader, we need to pass it positions
-	    // as an attribute - so set up that communication
-        groundShaderProgram.PositionAttribute = gl.getAttribLocation(groundShaderProgram, "vPosition");
-        gl.enableVertexAttribArray(groundShaderProgram.PositionAttribute);
-
-        groundShaderProgram.NormalAttribute = gl.getAttribLocation(groundShaderProgram, "vNormal");
-        gl.enableVertexAttribArray(groundShaderProgram.NormalAttribute);
-
-        groundShaderProgram.ColorAttribute = gl.getAttribLocation(groundShaderProgram, "vColor");
-        gl.enableVertexAttribArray(groundShaderProgram.ColorAttribute);
-
-        groundShaderProgram.TexCoorAttribute = gl.getAttribLocation(groundShaderProgram, "vTexCoord");
-        gl.enableVertexAttribArray(groundShaderProgram.TexCoorAttribute);
-
-        // this gives us access to the matrix uniform
-        groundShaderProgram.SunVector = gl.getUniformLocation(groundShaderProgram, "uSun");
-        groundShaderProgram.WorldMatrix = gl.getUniformLocation(groundShaderProgram, "uWorld");
-        groundShaderProgram.CameraMatrix = gl.getUniformLocation(groundShaderProgram, "uCamera");
-        groundShaderProgram.PerspectiveMatrix = gl.getUniformLocation(groundShaderProgram, "uPerspective");
-        
-	    // Attach the shaders and link
-        shaderProgram = gl.createProgram();
-        gl.attachShader(shaderProgram, vertexShader);
-        gl.attachShader(shaderProgram, fragmentShader);
-        gl.linkProgram(shaderProgram);
-        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-            alert("Could not initialize shaders"); }
-        
-
-	    // with the vertex shader, we need to pass it positions
-	    // as an attribute - so set up that communication
-        shaderProgram.PositionAttribute = gl.getAttribLocation(shaderProgram, "vPosition");
-        gl.enableVertexAttribArray(shaderProgram.PositionAttribute);
-
-        shaderProgram.NormalAttribute = gl.getAttribLocation(shaderProgram, "vNormal");
-        gl.enableVertexAttribArray(shaderProgram.NormalAttribute);
-
-        shaderProgram.ColorAttribute = gl.getAttribLocation(shaderProgram, "vColor");
-        gl.enableVertexAttribArray(shaderProgram.ColorAttribute);
-
-        shaderProgram.TexCoorAttribute = gl.getAttribLocation(shaderProgram, "vTexCoord");
-        gl.enableVertexAttribArray(shaderProgram.TexCoorAttribute);
-
-        // this gives us access to the matrix uniform
-        shaderProgram.SunVector = gl.getUniformLocation(shaderProgram, "uSun");
-	    shaderProgram.WorldMatrix = gl.getUniformLocation(shaderProgram, "uWorld");
-	    shaderProgram.CameraMatrix = gl.getUniformLocation(shaderProgram, "uCamera");
-        shaderProgram.PerspectiveMatrix = gl.getUniformLocation(shaderProgram, "uPerspective");
-
-        // Set up texture
-        vTexture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, vTexture);
+        // Set up textures
+        // video texture
+        gl.bindTexture(gl.TEXTURE_2D, video_texture);
         var pixel = new Uint8Array([255, 0, 0, 255]);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        vImage = new Image();
-        vImage.crossOrigin = "anonymous";
         
-        // set up geometry
-        var ico = new Icosahedron(0.0, 0.0, 0.0, 500.0, gl, [1.0, 0.0, 1.0], m4.identity(), "Video Ball");
-        var ground = new Plane(0.0, 0.0, 0.0, 26500.0, 26500.0, gl, [0.0, 1.0, 0.0], m4.setTranslation(m4.axisRotation([1.0, 0.0, 0.0], -Math.PI / 2), [0.0, -500.0, 0.0]), "Ground");//m4.axisRotation([1.0, 0.0, 0.0], Math.PI/2));
+        // Set up geometry
+        ico = new Icosahedron(0.0, 0.0, 0.0, 500.0, gl, [1.0, 0.0, 1.0], m4.identity(), "Video Ball");
+        ico.velocities = [0.0, 0.0, 50.0];
+        ico.trajectory = [0.0, 0.0, 1.0];
+        ground = new Plane(0.0, 0.0, 0.0, 26500.0, 26500.0, gl, [0.0, 1.0, 0.0], m4.setTranslation(m4.axisRotation([1.0, 0.0, 0.0], -Math.PI / 2), [0.0, -500.0, 0.0]), "Ground");
 
-        drawObjs = [ico, ground];
-        objShaders = [shaderProgram,groundShaderProgram];
-        drawObjs[0].velocities = [0.0, 0.0, 50.0];
-        drawObjs[0].trajectory = [0.0, 0.0, 1.0];
+        drawingElements = [[ico, 0], [ground, 1]];
 
-        for (var i = 0; i < drawObjs.length; i++) {
+        for (var i = 0; i < drawingElements.length; i++) {
             var tempOption = document.createElement('option');
-            tempOption.text = drawObjs[i].name;
+            tempOption.text = drawingElements[i][0].name;
             tempOption.value = i;
             cntrl_view.add(tempOption);
         }
@@ -278,8 +268,28 @@
             lastTime = currentTime;
             frameCount++;
 
-            if (copyVideo) {
-                gl.bindTexture(gl.TEXTURE_2D, vTexture);
+            if (!video.paused) {
+                video_canvas.width = video_canvas.width;
+                video_context.drawImage(video, 0.0, 0.0, 320.0, 240.0);
+                video_context.beginPath();
+                video_context.strokeStyle = "#00FF00";
+                video_context.lineWidth = 3;
+                video_context.lineCap = "round";
+                video_context.moveTo(ico.vertexTexCoords2[0] * video_canvas.width, ico.vertexTexCoords2[1] * video_canvas.height);
+                video_context.lineTo(ico.vertexTexCoords2[2] * video_canvas.width, ico.vertexTexCoords2[3] * video_canvas.height);
+                video_context.lineTo(ico.vertexTexCoords2[4] * video_canvas.width, ico.vertexTexCoords2[5] * video_canvas.height);
+                video_context.lineTo(ico.vertexTexCoords2[0] * video_canvas.width, ico.vertexTexCoords2[1] * video_canvas.height);
+                video_context.stroke();
+                if (videoDraging) {
+                    video_context.beginPath();
+                    video_context.strokeStyle = "#FFFF00";
+                    var vidPos = cumulativeOffset(video_canvas);
+                    video_context.moveTo(videoDownX, videoDownY);
+                    video_context.lineTo(mouse[0] - vidPos.left, mouse[1] - vidPos.top);
+                    video_context.stroke();
+                }
+                
+                gl.bindTexture(gl.TEXTURE_2D, video_texture);
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
             }
 	    
@@ -289,103 +299,100 @@
             if (keyboard_input[68]) {
                 eyeOffset += 0.05 * delta;
             }
-            var eye = [drawObjs[0].position[0] + 6000.0 * Math.cos((-Math.PI / 2 + eyeOffset)), 6000.0, drawObjs[0].position[2] + 6000.0 * Math.sin((-Math.PI / 2 + eyeOffset))];
-            var target = [drawObjs[0].position[0], 0.0, drawObjs[0].position[2]];
+            var eye = [ico.position[0] + 6000.0 * Math.cos((-Math.PI / 2 + eyeOffset)), 6000.0, ico.position[2] + 6000.0 * Math.sin((-Math.PI / 2 + eyeOffset))];
+            var target = [ico.position[0], 0.0, ico.position[2]];
             var up = [0, 1, 0];
 
             var tCamera = m4.inverse(m4.lookAt(eye, target, up));
             var tProjection = m4.perspective(Math.PI / 4, canvas.width / canvas.height, 10, 50000);
 
             if (document.getElementById("Run").checked) {
-                var dir = normalize([drawObjs[0].position[0] - eye[0], drawObjs[0].position[2] - eye[2]]);
+                var dir = normalize([ico.position[0] - eye[0], ico.position[2] - eye[2]]);
 
-                drawObjs[0].velocities[0] -= (0.01 * delta) * drawObjs[0].velocities[0];
-                drawObjs[0].velocities[1] -= (20.0 * delta); // gravity;
-                drawObjs[0].velocities[2] -= (0.01 * delta) * drawObjs[0].velocities[2];
+                ico.velocities[0] -= (0.01 * delta) * ico.velocities[0];
+                ico.velocities[1] -= (20.0 * delta); // gravity;
+                ico.velocities[2] -= (0.01 * delta) * ico.velocities[2];
 
-                var ntrajec = [dir[0] - drawObjs[0].trajectory[0], dir[1] - drawObjs[0].trajectory[2]];
-                drawObjs[0].trajectory[0] = drawObjs[0].trajectory[0] + ntrajec[0];
-                drawObjs[0].trajectory[2] = drawObjs[0].trajectory[2] + ntrajec[1];
-                drawObjs[0].trajectory = normalize(drawObjs[0].trajectory);
+                var ntrajec = [dir[0] - ico.trajectory[0], dir[1] - ico.trajectory[2]];
+                ico.trajectory[0] = ico.trajectory[0] + ntrajec[0];
+                ico.trajectory[2] = ico.trajectory[2] + ntrajec[1];
+                ico.trajectory = normalize(ico.trajectory);
 
-                drawObjs[0].velocities[0] += (2.0 * keyboard_input[87] * delta * drawObjs[0].trajectory[0]) - (2.0 * keyboard_input[83] * delta * drawObjs[0].trajectory[0]);
-                drawObjs[0].velocities[2] += (2.0 * keyboard_input[87] * delta * drawObjs[0].trajectory[2]) - (2.0 * keyboard_input[83] * delta * drawObjs[0].trajectory[2]);
+                ico.velocities[0] += (2.0 * keyboard_input[87] * delta * ico.trajectory[0]) - (2.0 * keyboard_input[83] * delta * ico.trajectory[0]);
+                ico.velocities[2] += (2.0 * keyboard_input[87] * delta * ico.trajectory[2]) - (2.0 * keyboard_input[83] * delta * ico.trajectory[2]);
 
-                var pre = [drawObjs[0].position[0], drawObjs[0].position[2]];
-                drawObjs[0].position[0] += drawObjs[0].velocities[0];
-                drawObjs[0].position[1] += drawObjs[0].velocities[1];
-                drawObjs[0].position[2] += drawObjs[0].velocities[2];
+                var pre = [ico.position[0], ico.position[2]];
+                ico.position[0] += ico.velocities[0];
+                ico.position[1] += ico.velocities[1];
+                ico.position[2] += ico.velocities[2];
 
-                if (drawObjs[0].position[0] > 13000.0) {
-                    drawObjs[0].position[0] += 13000.0 - drawObjs[0].position[0];
+                if (ico.position[0] > 13000.0) {
+                    ico.position[0] += 13000.0 - ico.position[0];
                 }
-                if (drawObjs[0].position[0] < -13000.0) {
-                    drawObjs[0].position[0] += -13000.0 - drawObjs[0].position[0];
+                if (ico.position[0] < -13000.0) {
+                    ico.position[0] += -13000.0 - ico.position[0];
                 }
-                if (drawObjs[0].position[1] < 0.0) {
-                    drawObjs[0].position[1] = 0.0;
-                    drawObjs[0].velocities[1] = 0.0;
+                if (ico.position[1] < 0.0) {
+                    ico.position[1] = 0.0;
+                    ico.velocities[1] = 0.0;
                 }
-                if (drawObjs[0].position[2] > 13000.0) {
-                    drawObjs[0].position[2] += 13000.0 - drawObjs[0].position[2];
+                if (ico.position[2] > 13000.0) {
+                    ico.position[2] += 13000.0 - ico.position[2];
                 }
-                if (drawObjs[0].position[2] < -13000.0) {
-                    drawObjs[0].position[2] += -13000.0 - drawObjs[0].position[2];
+                if (ico.position[2] < -13000.0) {
+                    ico.position[2] += -13000.0 - ico.position[2];
                 }
 
-                var dis = Math.sqrt((drawObjs[0].position[0] - pre[0]) * (drawObjs[0].position[0] - pre[0]) + (drawObjs[0].position[2] - pre[1]) * (drawObjs[0].position[2] - pre[1]));
+                var dis = Math.sqrt((ico.position[0] - pre[0]) * (ico.position[0] - pre[0]) + (ico.position[2] - pre[1]) * (ico.position[2] - pre[1]));
                 if (dis < 0.1)
                     dis = 0.1;
-                pre[0] = drawObjs[0].position[0] - pre[0];
-                pre[1] = drawObjs[0].position[2] - pre[1];
+                pre[0] = ico.position[0] - pre[0];
+                pre[1] = ico.position[2] - pre[1];
                 pre = normalize(pre);
                 if (isNaN(pre[0]))
                     pre[0] = 0.0;
                 if (isNaN(pre[1]))
                     pre[1] = 1.0;
 
-                m4.multiply(m4.axisRotation(m4.transformDirection(m4.inverse(drawObjs[0].rtx), [pre[0] * Math.cos(-Math.PI / 2) - pre[1] * Math.sin(-Math.PI / 2), drawObjs[0].trajectory[1], pre[0] * Math.sin(-Math.PI / 2) + pre[1] * Math.cos(-Math.PI / 2)]), dis / drawObjs[0].r), drawObjs[0].rtx, drawObjs[0].rtx);
-                m4.setTranslation(drawObjs[0].rtx, [drawObjs[0].position[0], drawObjs[0].position[1], drawObjs[0].position[2]], drawObjs[0].tx);
+                m4.multiply(m4.axisRotation(m4.transformDirection(m4.inverse(ico.rtx), [pre[0] * Math.cos(-Math.PI / 2) - pre[1] * Math.sin(-Math.PI / 2), ico.trajectory[1], pre[0] * Math.sin(-Math.PI / 2) + pre[1] * Math.cos(-Math.PI / 2)]), dis / ico.r), ico.rtx, ico.rtx);
+                m4.setTranslation(ico.rtx, [ico.position[0], ico.position[1], ico.position[2]], ico.tx);
             }
+
             // Clear screen, prepare for rendering
             gl.clearColor(0.0, 0.0, 0.0, 1.0);
-            gl.enable(gl.DEPTH_TEST);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-            //gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
 
             var Sun = [0.0, Math.sin(1.5 * Math.PI + Math.PI * 2 * cntrl_tod.value / cntrl_tod.max), Math.cos(1.5 * Math.PI + Math.PI * 2 * cntrl_tod.value / cntrl_tod.max)];
 
-            for (var i = 0; i < drawObjs.length; i++) {
-                gl.useProgram(objShaders[i]);
+            for (var i = 0; i < drawingElements.length; i++) {
+                gl.useProgram(shaderPrograms[drawingElements[i][1]]);
+                
+                var WorldTransform = drawingElements[i][0].tx;
+                var CameraTransform = m4.multiply(drawingElements[i][0].tx, tCamera);
+                var PerspectiveTransform = m4.multiply(m4.multiply(drawingElements[i][0].tx, tCamera), tProjection);
 
-                var WorldTransform = drawObjs[i].tx;
-                var CameraTransform = m4.multiply(drawObjs[i].tx, tCamera);
-                var PerspectiveTransform = m4.multiply(m4.multiply(drawObjs[i].tx, tCamera), tProjection);
+                // Set uniforms
+                gl.uniform3fv(shaderPrograms[drawingElements[i][1]].SunVector, Sun);
+                gl.uniformMatrix4fv(shaderPrograms[drawingElements[i][1]].WorldMatrix, false, WorldTransform);
+                gl.uniformMatrix4fv(shaderPrograms[drawingElements[i][1]].CameraMatrix, false, CameraTransform);
+                gl.uniformMatrix4fv(shaderPrograms[drawingElements[i][1]].PerspectiveMatrix, false, PerspectiveTransform);
+                // Set attributes
+                gl.bindBuffer(gl.ARRAY_BUFFER, drawingElements[i][0].vertexBuff);
+                gl.vertexAttribPointer(shaderPrograms[drawingElements[i][1]].PositionAttribute, drawingElements[i][0].vertexBuff.itemSize, gl.FLOAT, false, 0, 0);
 
-                // Set up uniforms & attributes
-                gl.uniform3fv(objShaders[i].SunVector, Sun);
-                gl.uniformMatrix4fv(objShaders[i].WorldMatrix, false, WorldTransform);
-                gl.uniformMatrix4fv(objShaders[i].CameraMatrix, false, CameraTransform);
-                gl.uniformMatrix4fv(objShaders[i].PerspectiveMatrix, false, PerspectiveTransform);
+                gl.bindBuffer(gl.ARRAY_BUFFER, drawingElements[i][0].colorBuff);
+                gl.vertexAttribPointer(shaderPrograms[drawingElements[i][1]].ColorAttribute, drawingElements[i][0].colorBuff.itemSize, gl.FLOAT, false, 0, 0);
 
-                gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[i].vertexBuff);
-                gl.vertexAttribPointer(objShaders[i].PositionAttribute, drawObjs[i].vertexBuff.itemSize, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, drawingElements[i][0].normalBuff);
+                gl.vertexAttribPointer(shaderPrograms[drawingElements[i][1]].NormalAttribute, drawingElements[i][0].normalBuff.itemSize, gl.FLOAT, false, 0, 0);
 
-                gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[i].colorBuff);
-                gl.vertexAttribPointer(objShaders[i].ColorAttribute, drawObjs[i].colorBuff.itemSize, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, drawingElements[i][0].texBuff);
+                gl.vertexAttribPointer(shaderPrograms[drawingElements[i][1]].TexCoorAttribute, drawingElements[i][0].texBuff.itemSize, gl.FLOAT, false, 0, 0);
 
-                gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[i].normalBuff);
-                gl.vertexAttribPointer(objShaders[i].NormalAttribute, drawObjs[i].normalBuff.itemSize, gl.FLOAT, false, 0, 0);
-
-                gl.bindBuffer(gl.ARRAY_BUFFER, drawObjs[i].texBuff);
-                gl.vertexAttribPointer(objShaders[i].TexCoorAttribute, drawObjs[i].texBuff.itemSize, gl.FLOAT, false, 0, 0);
-
-                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, drawObjs[i].indexBuff);
-
-                //gl.bindTexture(gl.TEXTURE_2D, vTexture);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, drawingElements[i][0].indexBuff);
 
                 // Do the drawing
-                gl.drawElements(gl.TRIANGLES, drawObjs[i].triangleIndices.length, gl.UNSIGNED_BYTE, 0);
+                gl.drawElements(gl.TRIANGLES, drawingElements[i][0].triangleIndices.length, gl.UNSIGNED_BYTE, 0);
             }
             window.requestAnimationFrame(update);
     };
@@ -435,8 +442,8 @@
 
     // event for mouse moving
     function myMouse(e) {
-        mouseX = e.clientX;
-        mouseY = e.clientY;
+        mouse[0] = e.clientX;
+        mouse[1] = e.clientY;
     };
     
     // event for keyboard key being pressed
@@ -444,7 +451,7 @@
         try {
             keyboard_input[e.keyCode] = 1;
             if (keyboard_input[32]) {
-                drawObjs[0].velocities[1] += 300.0 * (1 - key_space) * (drawObjs[0].position[1] == 0.0);
+                ico.velocities[1] += 300.0 * (1 - key_space) * (ico.position[1] == 0.0);
                 key_space = true;
             };
         } catch (e) {
