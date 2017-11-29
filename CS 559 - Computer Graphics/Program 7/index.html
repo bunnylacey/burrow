@@ -108,7 +108,7 @@
     video_canvas.onmouseout = videoUp;
     video_canvas.onmouseleave = videoUp;
     video_canvas.onmouseup = videoUp;
-
+    //video_canvas.onclick = videoClick;
     // will set to true when video can be copied to texture
     function videoDown(e) {
         var vidPos = cumulativeOffset(video_canvas);
@@ -144,6 +144,40 @@
         ico.texBuff.itemSize = 2;
         ico.texBuff.numItems = 60;
         videoDraging = false;
+    }
+
+    var vidClickX = -1;
+    var vidClickY = -1;
+    function videoClick(e) {
+        var vidPos = cumulativeOffset(video_canvas);
+        if (vidClickX != -1) {
+            
+            var height = (e.pageY - vidPos.top) - vidClickY;
+            var sideLength = Math.abs(height) / Math.sqrt(3);
+            var apothemX = Math.abs((e.pageX - vidPos.left) - vidClickX) / 2;
+            var apothemY = height / 3;
+
+            ico.vertexTexCoords2 = new Float32Array(
+                [(vidClickX + apothemX) / video_canvas.clientWidth, vidClickY / video_canvas.clientHeight,
+                    (vidClickX + apothemX - sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight,
+                    (vidClickX + apothemX + sideLength) / video_canvas.clientWidth, (e.pageY - vidPos.top) / video_canvas.clientHeight]);
+            for (var i = 0; i < ico.triangleIndices2.length; i++) {
+                ico.vertexTexCoords[i * 2] = ico.vertexTexCoords2[(i * 2 + 6) % 6];
+                ico.vertexTexCoords[i * 2 + 1] = ico.vertexTexCoords2[(i * 2 + 7) % 6];
+            }
+            // a buffer for textures
+            ico.texBuff = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, ico.texBuff);
+            gl.bufferData(gl.ARRAY_BUFFER, ico.vertexTexCoords, gl.STATIC_DRAW);
+            ico.texBuff.itemSize = 2;
+            ico.texBuff.numItems = 60;
+
+            vidClickX = -1;
+            vidClickY = -1;
+        } else {
+            vidClickX = (e.pageX - vidPos.left);
+            vidClickY = (e.pageY - vidPos.top);
+        }
     }
 
     // initialize our varaibles and start update function
