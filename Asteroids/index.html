@@ -1,0 +1,157 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="description" content="Blacey - Cloneroids">
+    <meta charset="utf-8">
+    <title>Blacey - Cloneroids</title>
+    
+    <link rel="stylesheet" type="text/css" href="incl/style.css" />
+	
+	<script type="text/javascript" src="scripts/bunnymath.js"></script>
+	<script type="text/javascript" src="scripts/gameobject.js"></script>	                                                                                                xc
+	<script type="text/javascript" src="scripts/asteroid.js"></script>
+	<script type="text/javascript" src="scripts/gamesession.js"></script>
+	<script type="text/javascript" src="scripts/playercontroller.js"></script>
+	<script type="text/javascript" src="scripts/ship.js"></script>
+    
+	<script type="text/javascript" src="https://twgljs.org/dist/4.x/twgl.min.js"></script>
+</head>
+<body>
+    <div id="canvasContainer">
+        <canvas id="myCanvas"></canvas>
+    </div>
+    <div id="textOverlay">
+        Bunny Lacey - Asteroids Clone
+    </div>
+    <div id="FPSContainer"></div>
+
+    <script type="text/javascript">
+		
+		var gameSession;
+		var playerController;
+		var ship;
+		var asteroids;
+
+        const canvas = document.getElementById('myCanvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const context = canvas.getContext('2d');
+
+        // twgl linear algebra helper
+        var m4 = twgl.m4;
+
+        function init() {
+			gameSession = new GameSession();
+			
+			asteroids = new Array(100).fill(undefined);
+			for(var i = 0; i < 100; i++) {
+				asteroids[i] = new Asteroid(canvas);
+			}
+			
+			ship = new Ship(canvas);
+			ship.visible = true;
+			ship.location.x = canvas.width / 2.0;
+			ship.location.y = canvas.height / 2.0;
+			
+			spawnAsteroid();
+			spawnAsteroid();
+			spawnAsteroid();
+			spawnAsteroid();
+			spawnAsteroid();
+			spawnAsteroid();
+			
+			playerController = new PlayerController(ship);
+			playerController.Activate();
+			
+            window.requestAnimationFrame(update);
+        };
+
+        // update function
+        function update() {
+			gameSession.update();
+			if(gameSession.delta > 1.5)
+			{
+				//console.log(gameSession.delta);
+			}
+			if(!document.hasFocus())
+			{
+				window.requestAnimationFrame(update);
+				return;
+			}
+			
+			
+            
+			context.clearRect(0, 0, canvas.width, canvas.height);
+			
+			if(ship.visible)
+			{
+				ship.tick(gameSession.delta);
+				ship.draw();
+			}
+			
+			for(var i = 0; i < asteroids.length; i++)
+			{
+				if(asteroids[i].visible)
+				{
+					asteroids[i].tick(gameSession.delta);
+					asteroids[i].draw();
+				} else {
+					continue;
+				}
+			}
+			
+            window.requestAnimationFrame(update);
+        };
+		
+		function spawnAsteroid() {
+			for(var i = 0; i < asteroids.length; i++)
+			{
+				if(!asteroids[i].visible)
+				{
+					asteroids[i].visible = true;
+					var arand = Math.random() * 2.0 * Math.PI;
+					
+					asteroids[i].location.x = Math.random() * canvas.width;
+					asteroids[i].location.y = Math.random() * canvas.height;
+					
+					asteroids[i].velocity.x = Math.sin(arand);// * 0.01;
+					asteroids[i].velocity.y = Math.cos(arand);// * 0.01;
+					return;
+				}
+			}
+		}
+
+        /*
+                UTILITIES
+        */
+
+        // returns screen coordinates of DOM element
+        function cumulativeOffset(element) {
+            var top = 0, left = 0;
+            do {
+                top += element.offsetTop || 0;
+                left += element.offsetLeft || 0;
+                element = element.offsetParent;
+            } while (element);
+
+            return {
+                top: top,
+                left: left
+            };
+        };
+
+        /*
+                EVENT HANDLERS
+        */
+
+        // event for window resizing
+        function myResize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+
+        window.onload = this.init;
+        window.onresize = this.myResize;
+    </script>
+</body>
+</html>
