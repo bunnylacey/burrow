@@ -1,5 +1,5 @@
 "use strict"
-class Asteroid extends GameObject
+class Bullet extends GameObject
 {
 	constructor(canvas)
 	{
@@ -17,10 +17,12 @@ class Asteroid extends GameObject
 			
 			if(this.location.x < 0.0 || this.location.x > this.canvas.width)
 			{
+				this.visible = false;
 				this.location.x = (this.location.x + this.canvas.width) % this.canvas.width;
 			}
 			if(this.location.y < 0.0 || this.location.y > this.canvas.height)
 			{
+				this.visible = false;
 				this.location.y = (this.location.y + this.canvas.height) % this.canvas.height;
 			}
 		}
@@ -41,11 +43,7 @@ class Asteroid extends GameObject
 		this.context.beginPath();
 		this.context.strokeStyle = "#FFFFFF";
 		this.context.lineWidth = 3;
-		this.context.moveTo(-20.0, -20.0);
-		this.context.lineTo(20.0, -20.0);
-		this.context.lineTo(20.0, 20.0);
-		this.context.lineTo(-20.0, 20.0);
-		this.context.lineTo(-20.0, -20.0);
+		this.context.arc(0, 0, 5, 0, 2 * Math.PI);
 		this.context.stroke();
 		this.context.restore();
 	}

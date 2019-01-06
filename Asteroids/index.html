@@ -8,7 +8,8 @@
     <link rel="stylesheet" type="text/css" href="incl/style.css" />
 	
 	<script type="text/javascript" src="scripts/bunnymath.js"></script>
-	<script type="text/javascript" src="scripts/gameobject.js"></script>	                                                                                                xc
+	<script type="text/javascript" src="scripts/gameobject.js"></script>
+	<script type="text/javascript" src="scripts/bullet.js"></script>
 	<script type="text/javascript" src="scripts/asteroid.js"></script>
 	<script type="text/javascript" src="scripts/gamesession.js"></script>
 	<script type="text/javascript" src="scripts/playercontroller.js"></script>
@@ -31,6 +32,7 @@
 		var playerController;
 		var ship;
 		var asteroids;
+		var bullets;
 
         const canvas = document.getElementById('myCanvas');
         canvas.width = window.innerWidth;
@@ -46,6 +48,11 @@
 			asteroids = new Array(100).fill(undefined);
 			for(var i = 0; i < 100; i++) {
 				asteroids[i] = new Asteroid(canvas);
+			}
+			
+			bullets = new Array(100).fill(undefined);
+			for(var i = 0; i < 100; i++) {
+				bullets[i] = new Bullet(canvas);
 			}
 			
 			ship = new Ship(canvas);
@@ -79,14 +86,26 @@
 				return;
 			}
 			
-			
-            
 			context.clearRect(0, 0, canvas.width, canvas.height);
 			
 			if(ship.visible)
 			{
 				ship.tick(gameSession.delta);
 				ship.draw();
+				
+				if(playerController.shooting) {
+					spawnBullet(ship);
+				}
+			}
+			
+			for(var i = 0; i < bullets.length; i++)
+			{
+				if(bullets[i].visible) {
+					bullets[i].tick(gameSession.delta);
+					bullets[i].draw();
+				} else {
+					continue;
+				}
 			}
 			
 			for(var i = 0; i < asteroids.length; i++)
@@ -116,6 +135,23 @@
 					
 					asteroids[i].velocity.x = Math.sin(arand);// * 0.01;
 					asteroids[i].velocity.y = Math.cos(arand);// * 0.01;
+					return;
+				}
+			}
+		}
+		
+		function spawnBullet(gameobject) {
+			for(var i = 0; i < bullets.length; i++)
+			{
+				if(!bullets[i].visible)
+				{
+					bullets[i].visible = true;
+					
+					bullets[i].location.x = gameobject.location.x;
+					bullets[i].location.y = gameobject.location.y;
+					
+					bullets[i].velocity.x = gameobject.orientation.x * 10.0;
+					bullets[i].velocity.y = gameobject.orientation.y * 10.0;
 					return;
 				}
 			}

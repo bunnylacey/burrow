@@ -11,6 +11,9 @@ class PlayerController
 		
 		// mouse position data x, y, downx, downy, isdown
 		this.mouse = new Array(5).fill(0.0);
+		
+		this.shooting = 0;
+		this.cooldown = 0;
 	}
 	
 	Activate() {
@@ -33,7 +36,9 @@ class PlayerController
 PlayerController.prototype.onKeyUpHandler = function(e, target)
 {
 	try {
+		console.log(e.keyCode);
 		target.keyboard[e.keyCode] = 0;
+		target.shooting = (target.keyboard[32]);
 		target.gameobject.accelerating = (target.keyboard[87] || target.keyboard[38]);
 		target.gameobject.rotating = (target.keyboard[68] || target.keyboard[39]) - (target.keyboard[65] || target.keyboard[37]);
 	} catch (error) {
@@ -60,6 +65,7 @@ PlayerController.prototype.onKeyDownHandler = function(e, target)
 {
 	try {
 		target.keyboard[e.keyCode] = 1;
+		target.shooting = (target.keyboard[32]);
 		target.gameobject.accelerating = (target.keyboard[87] || target.keyboard[38]);
 		target.gameobject.rotating = (target.keyboard[68] || target.keyboard[39]) - (target.keyboard[65] || target.keyboard[37]);
 	} catch (error) {

@@ -55,6 +55,9 @@ class Ship extends GameObject
 	
 	draw()
 	{
+		if(!this.visible) {
+			return;
+		}
 		if(this.canvas == undefined)
 		{
 			console.log(typeof(this) + " : canvas undefined");
