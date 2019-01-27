@@ -22,7 +22,8 @@
         <canvas id="myCanvas"></canvas>
     </div>
     <div id="textOverlay">
-        Bunny Lacey - Asteroids Clone
+        Bunny Lacey - Asteroids Clone<br/>
+		<button id="debugDrawBtn" onclick="toggleDebugDraw()">Toggle Debug Draw</button>
     </div>
     <div id="FPSContainer"></div>
 
@@ -33,6 +34,9 @@
 		var ship;
 		var asteroids;
 		var bullets;
+		var bulletLifetime = 60.0;
+		
+		var debugDraw = false;
 
         const canvas = document.getElementById('myCanvas');
         canvas.width = window.innerWidth;
@@ -76,10 +80,6 @@
         // update function
         function update() {
 			gameSession.update();
-			if(gameSession.delta > 1.5)
-			{
-				//console.log(gameSession.delta);
-			}
 			if(!document.hasFocus())
 			{
 				window.requestAnimationFrame(update);
@@ -91,10 +91,13 @@
 			if(ship.visible)
 			{
 				ship.tick(gameSession.delta);
-				ship.draw();
+				ship.draw(this.debugDraw);
 				
-				if(playerController.shooting) {
+				if(playerController.shooting && playerController.cooldown <= 0.0) {
 					spawnBullet(ship);
+					playerController.cooldown = 14.0;
+				} else {
+					playerController.cooldown -= gameSession.delta;
 				}
 			}
 			
@@ -102,7 +105,7 @@
 			{
 				if(bullets[i].visible) {
 					bullets[i].tick(gameSession.delta);
-					bullets[i].draw();
+					bullets[i].draw(this.debugDraw);
 				} else {
 					continue;
 				}
@@ -113,9 +116,49 @@
 				if(asteroids[i].visible)
 				{
 					asteroids[i].tick(gameSession.delta);
-					asteroids[i].draw();
+					asteroids[i].draw(this.debugDraw);
 				} else {
 					continue;
+				}
+			}
+			
+			// do simple collision
+			if(ship.visible)
+			{
+				for(var i = 0; i < asteroids.length; i++)
+				{
+					if(asteroids[i].visible)
+					{
+						// test bullets vs asteroids
+						for(var k = 0; k < bullets.length; k++)
+						{
+							if(bullets[k].visible) {
+								if(Rect.isOverlapping(Rect.getTranslation(bullets[k].boundingBox, bullets[k].location), Rect.getTranslation(asteroids[i].boundingBox, asteroids[i].location)))
+								{
+									if(bulletAsteroidComplexCollision(bullets[k], asteroids[i]))
+									{
+										if(this.debugDraw)
+											traceComplexCollision(bullets[k], asteroids[i]);
+									} else {
+										if(this.debugDraw)
+											traceSimpleCollision(bullets[k], asteroids[i]);
+									}
+								}
+							} else {
+								continue;
+							}
+						}
+						
+						// test asteroids vs ship
+						if(Rect.isOverlapping(Rect.getTranslation(ship.boundingBox, ship.location), Rect.getTranslation(asteroids[i].boundingBox, asteroids[i].location)))
+						{
+							// it's a hit
+							if(this.debugDraw)
+								traceSimpleCollision(ship, asteroids[i]);
+						}
+					} else {
+						continue;
+					}
 				}
 			}
 			
@@ -133,8 +176,10 @@
 					asteroids[i].location.x = Math.random() * canvas.width;
 					asteroids[i].location.y = Math.random() * canvas.height;
 					
-					asteroids[i].velocity.x = Math.sin(arand);// * 0.01;
-					asteroids[i].velocity.y = Math.cos(arand);// * 0.01;
+					asteroids[i].velocity.x = Math.sin(arand);
+					asteroids[i].velocity.y = Math.cos(arand);
+					
+					asteroids[i].angularVelocity = Math.random() * 0.02 - 0.01;
 					return;
 				}
 			}
@@ -150,8 +195,10 @@
 					bullets[i].location.x = gameobject.location.x;
 					bullets[i].location.y = gameobject.location.y;
 					
-					bullets[i].velocity.x = gameobject.orientation.x * 10.0;
-					bullets[i].velocity.y = gameobject.orientation.y * 10.0;
+					bullets[i].velocity.x = gameobject.orientation.x * 10.0 + gameobject.velocity.x;
+					bullets[i].velocity.y = gameobject.orientation.y * 10.0 + gameobject.velocity.y;
+					
+					bullets[i].lifetime = this.bulletLifetime;
 					return;
 				}
 			}
@@ -160,6 +207,127 @@
         /*
                 UTILITIES
         */
+		
+		function bulletAsteroidComplexCollision(bullet, asteroid) {
+			for(var i = 0; i < asteroid.vertices.length; i++)
+			{
+				// make triangle with i, k, and asteroid center
+				var k = (i + 1) % (asteroid.vertices.length);
+				
+				var E = Matrix4.transformPoint(Matrix4.getRotationMatrix(asteroid.rotation), asteroid.vertices[i]);
+				E.x += asteroid.location.x;
+				E.y += asteroid.location.y;
+				
+				var L = Matrix4.transformPoint(Matrix4.getRotationMatrix(asteroid.rotation), asteroid.vertices[k]);
+				L.x += asteroid.location.x;
+				L.y += asteroid.location.y;
+				
+				var r2 = bullet.radius * bullet.radius;
+				
+				// Test 1: an asteroid vertex is in the bullet
+				var c1x = E.x - bullet.location.x;
+				var c1y = E.y - bullet.location.y;
+				if(c1x * c1x + c1y * c1y <= r2)
+					return true;
+					
+				var c2x = L.x - bullet.location.x;
+				var c2y = L.y - bullet.location.y;
+				if(c2x * c2x + c2y * c2y <= r2)
+					return true;
+				
+				// we only need to test the center point of the asteroid once
+				if(i == 0)
+				{
+					var c3x = asteroid.location.x - bullet.location.x;
+					var c3y = asteroid.location.y - bullet.location.y;
+					if(c3x * c3x + c3y * c3y <= r2)
+						return true;
+				}
+				
+				// Test 2: bullet center is inside an asteroid triangle
+				var t2cond1 = Vector2D.sign(bullet.location, E, L);
+				var t2cond2 = Vector2D.sign(bullet.location, L, asteroid.location);
+				var t2cond3 = Vector2D.sign(bullet.location, asteroid.location, E);
+				var has_neg = (t2cond1 < 0) || (t2cond2 < 0) || (t2cond3 < 0);
+				var has_pos = (t2cond1 > 0) || (t2cond2 > 0) || (t2cond3 > 0);
+				if(!(has_neg && has_pos))
+					return true;
+				
+				// Test 3: bullet is intersecting an asteroid triangle edge
+				// first edge
+				var t3_c1x = bullet.location.x - E.x;
+				var t3_c1y = bullet.location.y - E.y;
+				var t3_e1x = L.x - E.x;
+				var t3_e1y = L.y - E.y;
+				var t3_k1 = t3_c1x * t3_e1x + t3_c1y * t3_e1y;
+				
+				if(t3_k1 > 0)
+				{
+					var t3_len1 = Math.sqrt(t3_e1x * t3_e1x + t3_e1y * t3_e1y);
+					t3_k1 = t3_k1/t3_len1;
+					if(t3_k1 < t3_len1)
+					{
+						if(t3_c1x * t3_c1x + t3_c1y * t3_c1y - t3_k1 * t3_k1 <= r2)
+							return true;
+					}
+				}
+				
+				// second edge
+				var t3_c2x = bullet.location.x - L.x;
+				var t3_c2y = bullet.location.y - L.y;
+				var t3_e2x = asteroid.location.x - L.x;
+				var t3_e2y = asteroid.location.y - L.y;
+				var t3_k2 = t3_c2x * t3_e2x + t3_c2y * t3_e2y;
+				
+				if(t3_k2 > 0)
+				{
+					var t3_len2 = Math.sqrt(t3_e2x * t3_e2x + t3_e2y * t3_e2y);
+					t3_k2 = t3_k2/t3_len2;
+					if(t3_k2 < t3_len2)
+					{
+						if(t3_c2x * t3_c2x + t3_c2y * t3_c2y - t3_k2 * t3_k2 <= r2)
+							return true;
+					}
+				}
+				
+				// third edge
+				var t3_c3x = bullet.location.x - asteroid.location.x;
+				var t3_c3y = bullet.location.y - asteroid.location.y;
+				var t3_e3x = E.x - asteroid.location.x;
+				var t3_e3y = E.y - asteroid.location.y;
+				var t3_k3 = t3_c3x * t3_e3x + t3_c3y * t3_e3y;
+				
+				if(t3_k3 > 0)
+				{
+					var t3_len3 = Math.sqrt(t3_e3x * t3_e3x + t3_e3y * t3_e3y);
+					t3_k3 = t3_k3/t3_len3;
+					if(t3_k3 < t3_len3)
+					{
+						if(t3_c3x * t3_c3x + t3_c3y * t3_c3y - t3_k3 * t3_k3 <= r2)
+							return true;
+					}
+				}
+			}
+			return false;
+		};
+		
+		function traceSimpleCollision(go1, go2) {
+			context.beginPath();
+			context.strokeStyle = "#FFFF00";
+			context.lineWidth = 3;
+			context.moveTo(go1.location.x, go1.location.y);
+			context.lineTo(go2.location.x, go2.location.y);
+			context.stroke();
+		};
+		
+		function traceComplexCollision(go1, go2) {
+			context.beginPath();
+			context.strokeStyle = "#FF0000";
+			context.lineWidth = 3;
+			context.moveTo(go1.location.x, go1.location.y);
+			context.lineTo(go2.location.x, go2.location.y);
+			context.stroke();
+		};
 
         // returns screen coordinates of DOM element
         function cumulativeOffset(element) {
@@ -185,6 +353,11 @@
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
         };
+		
+		function toggleDebugDraw() {
+			this.debugDraw = !this.debugDraw;
+			document.getElementById('debugDrawBtn').blur();
+		};
 
         window.onload = this.init;
         window.onresize = this.myResize;

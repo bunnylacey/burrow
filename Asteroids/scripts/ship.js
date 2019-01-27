@@ -9,19 +9,30 @@ class Ship extends GameObject
 		this.acceleration = 0.1;
 		this.deceleration = 0.99;
 		this.animStep = 0;
+		this.orientation.x = 1.0;
+		this.vertices = new Array(4);
+		this.vertices[0] = new Vector2D(15.0, 0.0);
+		this.vertices[1] = new Vector2D(-15.0, 10.0);
+		this.vertices[2] = new Vector2D(-10.0, 0.0);
+		this.vertices[3] = new Vector2D(-15.0, -10.0);
+		this.updateBoundingBox();
 	}
 	
 	tick(delta)
 	{
 		if(this.visible)
 		{
-			this.rotation += 0.1 * delta * this.rotating;
-			if(this.rotation < 0.0 || this.rotation > Math.PI * 2.0)
+			if(this.rotating != 0.0)
 			{
-				this.rotation = (this.rotation + Math.PI * 2.0) % (Math.PI * 2.0);
+				this.rotation += 0.1 * delta * this.rotating;
+				if(this.rotation < 0.0 || this.rotation > Math.PI * 2.0)
+				{
+					this.rotation = (this.rotation + Math.PI * 2.0) % (Math.PI * 2.0);
+				}
+				this.orientation.x = Math.cos(this.rotation);
+				this.orientation.y = Math.sin(this.rotation);
+				this.updateBoundingBox();
 			}
-			this.orientation.x = Math.cos(this.rotation);
-			this.orientation.y = Math.sin(this.rotation);
 			
 			if(this.accelerating)
 			{
@@ -53,27 +64,95 @@ class Ship extends GameObject
 		}
 	}
 	
-	draw()
+	updateBoundingBox()
 	{
-		if(!this.visible) {
-			return;
-		}
-		if(this.canvas == undefined)
+		this.boundingBox.x = 0.0;
+		this.boundingBox.y = 0.0;
+		this.boundingBox.width = 0.0;
+		this.boundingBox.height = 0.0;
+		for(var i = 0; i < this.vertices.length; i++)
 		{
-			console.log(typeof(this) + " : canvas undefined");
+			var tempPoint = Matrix4.transformPoint(Matrix4.getRotationMatrix(this.rotation), this.vertices[i]);
+			this.boundingBox.x = Math.min(tempPoint.x, this.boundingBox.x);
+			this.boundingBox.y = Math.min(tempPoint.y, this.boundingBox.y);
+			this.boundingBox.width = Math.max(tempPoint.x, this.boundingBox.width);
+			this.boundingBox.height = Math.max(tempPoint.y, this.boundingBox.height);
+		}
+		this.boundingBox.width = this.boundingBox.width - this.boundingBox.x;
+		this.boundingBox.height = this.boundingBox.height - this.boundingBox.y;
+	}
+	
+	draw(debugDraw = false)
+	{
+		if(!this.visible || this.canvas == undefined) {
 			return;
 		}
+		
+		if(this.accelerating > 0.0)
+		{
+			this.animStep += 1;
+		} else {
+			this.animStep = 0;
+		}
+		
+		this.drawShip(this.location.x, this.location.y);
+		if(debugDraw)
+		{
+			this.drawBoundingBox(this.location.x, this.location.y);
+			this.drawVelocityAndOrientation(this.location.x, this.location.y);
+		}
+		
+		if(this.location.x + this.boundingBox.x < 0.0)
+		{
+			this.drawShip(this.location.x + this.canvas.width, this.location.y);
+			if(debugDraw)
+			{
+				this.drawBoundingBox(this.location.x + this.canvas.width, this.location.y);
+				this.drawVelocityAndOrientation(this.location.x + this.canvas.width, this.location.y);
+			}
+		}
+		if(this.location.y + this.boundingBox.y < 0.0)
+		{
+			this.drawShip(this.location.x, this.location.y + this.canvas.height);
+			if(debugDraw)
+			{
+				this.drawBoundingBox(this.location.x, this.location.y + this.canvas.height);
+				this.drawVelocityAndOrientation(this.location.x, this.location.y + this.canvas.height);
+			}
+		}
+		if(this.location.x + this.boundingBox.width >= this.canvas.width)
+		{
+			this.drawShip(this.location.x - this.canvas.width, this.location.y);
+			if(debugDraw)
+			{
+				this.drawBoundingBox(this.location.x - this.canvas.width, this.location.y);
+				this.drawVelocityAndOrientation(this.location.x - this.canvas.width, this.location.y);
+			}
+		}
+		if(this.location.y + this.boundingBox.height >= this.canvas.height)
+		{
+			this.drawShip(this.location.x, this.location.y - this.canvas.height);
+			if(debugDraw)
+			{
+				this.drawBoundingBox(this.location.x, this.location.y - this.canvas.height);
+				this.drawVelocityAndOrientation(this.location.x, this.location.y - this.canvas.height);
+			}
+		}
+	}
+	
+	drawShip(x, y)
+	{
 		this.context.save();
-		this.context.transform(1.0, 0.0, 0.0, 1.0, this.location.x, this.location.y);
+		this.context.transform(this.scale, 0.0, 0.0, this.scale, x, y);
 		this.context.rotate(this.rotation);
 		this.context.beginPath();
 		this.context.strokeStyle = "#FFFFFF";
 		this.context.lineWidth = 3;
-		this.context.moveTo(15.0, 0.0);
-		this.context.lineTo(-15.0, 10.0);
-		this.context.lineTo(-10.0, 0.0);
-		this.context.lineTo(-15.0, -10.0);
-		this.context.lineTo(15.0, 0.0);
+		this.context.moveTo(this.vertices[this.vertices.length - 1].x, this.vertices[this.vertices.length - 1].y);
+		for(var i = 0; i < this.vertices.length; i++)
+		{
+			this.context.lineTo(this.vertices[i].x, this.vertices[i].y);
+		}
 		if(this.accelerating > 0.0)
 		{
 			this.animStep += 1;
@@ -83,28 +162,27 @@ class Ship extends GameObject
 				this.context.lineTo(-20.0, 0.0);
 				this.context.lineTo(-12.5, 5.0);
 			}
-		} else {
-			this.animStep = 0;
-		}
-		
+		} 
 		this.context.stroke();
 		this.context.restore();
-		
+	}
+	
+	drawVelocityAndOrientation(x, y)
+	{
 		this.context.save();
-		this.context.transform(1.0, 0.0, 0.0, 1.0, this.location.x, this.location.y);
+		this.context.transform(this.scale, 0.0, 0.0, this.scale, x, y);
 		this.context.beginPath();
 		this.context.strokeStyle = "#00FF00";
 		this.context.lineWidth = 3;
 		this.context.moveTo(0.0, 0.0);
 		this.context.lineTo(this.velocity.x * 10.0, this.velocity.y * 10.0);
 		this.context.stroke();
-		this.context.beginPath();
+		/*this.context.beginPath();
 		this.context.strokeStyle = "#FFFF00";
 		this.context.lineWidth = 3;
 		this.context.moveTo(0.0, 0.0);
 		this.context.lineTo(this.orientation.x * 100.0, this.orientation.y * 100.0);
-		this.context.stroke();
+		this.context.stroke();*/
 		this.context.restore();
-		
 	}
 }

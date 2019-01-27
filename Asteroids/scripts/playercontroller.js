@@ -36,7 +36,7 @@ class PlayerController
 PlayerController.prototype.onKeyUpHandler = function(e, target)
 {
 	try {
-		console.log(e.keyCode);
+		//console.log(e.keyCode);
 		target.keyboard[e.keyCode] = 0;
 		target.shooting = (target.keyboard[32]);
 		target.gameobject.accelerating = (target.keyboard[87] || target.keyboard[38]);
