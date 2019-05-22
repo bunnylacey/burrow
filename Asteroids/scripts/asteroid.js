@@ -4,12 +4,13 @@ class Asteroid extends GameObject
 	constructor(canvas)
 	{
 		super();
+		this.chainSizes = new Array(new Vector2D(50.0, 30.0), new Vector2D(25.0, 15.0), new Vector2D(12.5, 7.5));
+		
 		this.canvas = canvas;
 		this.context = canvas.getContext('2d');
 		this.vertices = new Array(12);
-		this.maxMagnitude = 30.0;
-		this.minMagnitude = 20.0;
-		this.randomizeVertices();
+		this.spawnChain = 0;
+		this.randomizeVertices(0);
 	}
 	
 	tick(delta)
@@ -54,12 +55,13 @@ class Asteroid extends GameObject
 		this.boundingBox.height = this.boundingBox.height - this.boundingBox.y;
 	}
 	
-	randomizeVertices()
+	randomizeVertices(chain = 0)
 	{
+		this.spawnChain = chain;
 		var interval = Math.PI * 2 / this.vertices.length;
 		for(var i = 0; i < this.vertices.length; i++)
 		{
-			var magnitude = Math.random() * (this.maxMagnitude - this.minMagnitude) + this.minMagnitude;
+			var magnitude = Math.random() * (this.chainSizes[chain].x - this.chainSizes[chain].y) + this.chainSizes[chain].y;
 			this.vertices[i] = new Vector2D(Math.cos(interval * i) * magnitude, Math.sin(interval * i) * magnitude);
 		}
 		this.updateBoundingBox();

@@ -15,7 +15,7 @@
 	<script type="text/javascript" src="scripts/playercontroller.js"></script>
 	<script type="text/javascript" src="scripts/ship.js"></script>
     
-	<script type="text/javascript" src="https://twgljs.org/dist/4.x/twgl.min.js"></script>
+	<!-- <script type="text/javascript" src="https://twgljs.org/dist/4.x/twgl.min.js"></script> -->
 </head>
 <body>
     <div id="canvasContainer">
@@ -35,6 +35,7 @@
 		var asteroids;
 		var bullets;
 		var bulletLifetime = 60.0;
+		var maxAsteroidChain = 2;
 		
 		var debugDraw = false;
 
@@ -44,7 +45,7 @@
         const context = canvas.getContext('2d');
 
         // twgl linear algebra helper
-        var m4 = twgl.m4;
+        //var m4 = twgl.m4;
 
         function init() {
 			gameSession = new GameSession();
@@ -64,12 +65,12 @@
 			ship.location.x = canvas.width / 2.0;
 			ship.location.y = canvas.height / 2.0;
 			
-			spawnAsteroid();
-			spawnAsteroid();
-			spawnAsteroid();
-			spawnAsteroid();
-			spawnAsteroid();
-			spawnAsteroid();
+			spawnAsteroid(0);
+			spawnAsteroid(0);
+			spawnAsteroid(0);
+			spawnAsteroid(0);
+			spawnAsteroid(0);
+			spawnAsteroid(0);
 			
 			playerController = new PlayerController(ship);
 			playerController.Activate();
@@ -80,6 +81,8 @@
         // update function
         function update() {
 			gameSession.update();
+			document.getElementById("FPSContainer").textContent = gameSession.actualFPS;
+			
 			if(!document.hasFocus())
 			{
 				window.requestAnimationFrame(update);
@@ -137,6 +140,13 @@
 								{
 									if(bulletAsteroidComplexCollision(bullets[k], asteroids[i]))
 									{
+										if(asteroids[i].spawnChain < maxAsteroidChain)
+										{
+											spawnAsteroid(asteroids[i].spawnChain + 1, asteroids[i].location);
+											spawnAsteroid(asteroids[i].spawnChain + 1, asteroids[i].location);
+										}
+										bullets[k].visible = false;
+										asteroids[i].visible = false;
 										if(this.debugDraw)
 											traceComplexCollision(bullets[k], asteroids[i]);
 									} else {
@@ -165,7 +175,7 @@
             window.requestAnimationFrame(update);
         };
 		
-		function spawnAsteroid() {
+		function spawnAsteroid(chain = 0, location = new Vector2D(0.0, 0.0)) {
 			for(var i = 0; i < asteroids.length; i++)
 			{
 				if(!asteroids[i].visible)
@@ -173,8 +183,15 @@
 					asteroids[i].visible = true;
 					var arand = Math.random() * 2.0 * Math.PI;
 					
-					asteroids[i].location.x = Math.random() * canvas.width;
-					asteroids[i].location.y = Math.random() * canvas.height;
+					if(chain > 0)
+					{
+						asteroids[i].location.x = location.x;
+						asteroids[i].location.y = location.y;
+						asteroids[i].randomizeVertices(chain);
+					} else {
+						asteroids[i].location.x = Math.random() * canvas.width;
+						asteroids[i].location.y = Math.random() * canvas.height;
+					}
 					
 					asteroids[i].velocity.x = Math.sin(arand);
 					asteroids[i].velocity.y = Math.cos(arand);
